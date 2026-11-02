@@ -2,9 +2,9 @@
 
 **Aplicación web de finanzas personales con Open Finance.** Cada persona ve en qué se le va el dinero, detecta suscripciones y "gastos hormiga", entiende cuánto ahorra y recibe recomendaciones. Puede traer sus datos de tres formas: conectando su banco (Open Finance), subiendo el extracto CSV o registrando a mano.
 
-> Proyecto académico **DEFI JUANES** · Equipo: Juanes, Garavito, Aleja, David y Samu · Entrega: 12 de noviembre de 2026
+> Proyecto académico **DEFI JUANES** · Equipo: Juanes, Garavito, Aleja, David y Samu · Presentación final: viernes 20 de noviembre de 2026
 
-**App publicada:** `https://<nombre-del-servicio>.onrender.com` *(Samu: actualiza este enlace)*
+**App publicada:** `https://<nombre-del-servicio>.onrender.com` *(Samu: actualiza este enlace a más tardar el miércoles 4 de noviembre)*
 
 ---
 
@@ -19,9 +19,9 @@
 | Importar extractos CSV y registrar movimientos a mano | ✅ |
 | Centro de privacidad: autorizaciones, historial, descargar, borrar y eliminar cuenta | ✅ |
 | **Deudas y dinero ocioso:** registro de deudas, plan (deudas más caras primero y luego renta fija) y pagos autorizados en el banco | ✅ (pagos **simulados** con el banco de prueba) |
-| Presupuestos por categoría | 🛠️ Semanas 2–3 |
-| Metas de ahorro | 🛠️ Semanas 2–3 |
-| Recuperar contraseña por correo | 🛠️ Semana 3 |
+| Presupuestos por categoría | 🛠️ Meta: vie 13 nov |
+| Metas de ahorro | 🛠️ Meta: vie 13 nov |
+| Recuperar contraseña por correo | 🛠️ Meta: vie 13 nov |
 
 ## Inicio rápido
 
@@ -85,7 +85,7 @@ autowealth/
 | [docs/seguridad-y-cumplimiento.md](docs/seguridad-y-cumplimiento.md) | Medidas de seguridad, lista OWASP y marco legal colombiano |
 | [docs/instalacion-y-despliegue.md](docs/instalacion-y-despliegue.md) | Instalar, Neon, correos, Render y variables de configuración |
 | [docs/encuesta.md](docs/encuesta.md) | Preguntas del formulario de bienvenida |
-| [docs/plan-de-trabajo/](docs/plan-de-trabajo/README.md) | **Plan de 4 semanas** y tareas de cada integrante |
+| [docs/plan-de-trabajo/](docs/plan-de-trabajo/README.md) | **Plan de la recta final** (hasta el 20 de noviembre): prioridades, calendario y tareas de cada integrante |
 | [CONTRIBUTING.md](CONTRIBUTING.md) | Ramas, commits, Pull Requests y revisiones |
 | [CLAUDE.md](CLAUDE.md) | Reglas del proyecto para trabajar con Claude |
 
@@ -98,6 +98,8 @@ autowealth/
 | Aleja | Página de inicio, contenido y legal | [aleja.md](docs/plan-de-trabajo/aleja.md) |
 | David | Panel financiero | [david.md](docs/plan-de-trabajo/david.md) |
 | Samu | Infraestructura, seguridad y calidad | [samu.md](docs/plan-de-trabajo/samu.md) |
+
+Las fechas de los planes individuales se reemplazan por el calendario de [docs/plan-de-trabajo/README.md](docs/plan-de-trabajo/README.md).
 
 ## Aviso
 
