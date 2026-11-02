@@ -15,9 +15,13 @@
 
 Recuerda: el panel (`/app`) solo aparece **después de iniciar sesión**. Primero descarta eso: entra con una cuenta y abre `https://<tu-servicio>.onrender.com/app`. Si te devuelve a la portada pidiendo sesión, el código está bien y solo faltaba entrar. Si sale "Página no encontrada" o la portada no tiene botón de iniciar sesión, Render está publicando una versión vieja. Revisa en este orden:
 
-- [ ] **¿Cuál servicio es?** Si el enlace es el del servicio viejo de Juanes (conectado al repositorio anterior `autowealth-app`), termina el traspaso: crea el servicio en tu cuenta (pasos abajo). Si ya es tu servicio, sigue.
-- [ ] **Render → Settings:** el repositorio es `autowealth` y la rama es `main`.
-- [ ] **GitHub:** `public/app.html` está en la rama `main`. Si el panel quedó en una rama `feature/...` o en un PR sin fusionar, fusiónalo (con revisión).
+> **Diagnóstico (2 de noviembre):** el enlace viejo `https://autowealth-app.onrender.com` es el servicio de Juanes. Responde `/api/salud` con la base de datos conectada, pero publica una versión **anterior** a este repositorio: `/app`, `/privacidad` y las rutas de deudas dan 404. El código de `main` está bien (`public/app.html` existe y `server.js` sirve `/app`). **Solución: crear el servicio en tu cuenta** conectado a `juanesaacosta26/Autowealth-app` (pasos abajo).
+>
+> Ojo con los nombres: el repositorio del equipo es **`Autowealth-app`**. El que se llama `autowealth` (sin "-app") es una copia del 13 de octubre que nunca se actualizó.
+
+- [x] **¿Cuál servicio es?** Es el servicio viejo de Juanes → termina el traspaso: crea el servicio en tu cuenta (pasos abajo).
+- [ ] **Render → Settings:** el repositorio es `juanesaacosta26/Autowealth-app` y la rama es `main`.
+- [x] **GitHub:** `public/app.html` está en la rama `main`. Si el panel quedó en una rama `feature/...` o en un PR sin fusionar, fusiónalo (con revisión).
 - [ ] **Render → Events:** el último despliegue dice *Live*. Si dice *Failed*, en **Logs** busca la línea con ❌: dice qué variable falta.
 - [ ] Abre `https://<tu-servicio>.onrender.com/api/salud` → debe responder `{"ok":true,"baseDeDatos":"conectada"}`.
 - [ ] Pon la URL real en el `README.md` (PR) y avísale al equipo por el grupo.
@@ -25,7 +29,7 @@ Recuerda: el panel (`/app`) solo aparece **después de iniciar sesión**. Primer
 ### Si hay que crear el servicio en tu cuenta
 Pasos completos en [instalacion-y-despliegue.md §4](../instalacion-y-despliegue.md#4-publicar-en-render).
 - [ ] Juanes copia **todas** las variables de su servicio viejo al gestor de contraseñas del equipo (Bitwarden). **Nunca** por WhatsApp ni por el grupo.
-- [ ] En [render.com](https://render.com), con tu cuenta de GitHub: **New → Web Service** → `autowealth`. Nombre `autowealth`, Branch `main`, Region **Ohio (US East)**, Build `npm install`, Start `npm start`, Instance **Free**.
+- [ ] En [render.com](https://render.com), con tu cuenta de GitHub: **New → Web Service** → `juanesaacosta26/Autowealth-app`. Nombre `autowealth`, Branch `main`, Region **Ohio (US East)**, Build `npm install`, Start `npm start`, Instance **Free**, Auto-Deploy **After CI Checks Pass**. Si el repositorio no aparece, ver [Si Render no muestra el repositorio](../instalacion-y-despliegue.md#si-render-no-muestra-el-repositorio).
 - [ ] En **Environment Variables** pega, **exactamente iguales**, los valores del gestor: `NODE_ENV`, `DATABASE_URL`, `SESSION_SECRET`, `DATA_ENCRYPTION_KEY`, `SURVEY_URL`, `EMAIL_PROVIDER`, `GMAIL_SCRIPT_URL`, `GMAIL_SCRIPT_SECRET`, `OPEN_FINANCE_PROVIDER`, `CONSENT_MONTHS`, `ADMIN_USER`, `ADMIN_PASSWORD`. Cuidado con espacios al inicio o al final.
 - [ ] **Deploy Web Service** y en **Settings → Health Check Path** escribe `/api/salud`.
 - [ ] **Entra con un usuario que ya existía:** si ve sus movimientos sin "(no se pudo leer)", `DATABASE_URL` y `DATA_ENCRYPTION_KEY` quedaron bien.

@@ -21,8 +21,10 @@
 
 ### Pasos
 1. **Clona el repositorio** (descárgalo con Git):
-   - GitHub Desktop: **File → Clone repository** → elige `autowealth`.
-   - Terminal: `git clone https://github.com/<organizacion>/autowealth.git` y luego `cd autowealth`.
+   - GitHub Desktop: **File → Clone repository** → elige `juanesaacosta26/Autowealth-app`.
+   - Terminal: `git clone https://github.com/juanesaacosta26/Autowealth-app.git` y luego `cd Autowealth-app`.
+
+   > ⚠️ El repositorio del equipo es **`Autowealth-app`**. Existe otro llamado `autowealth` (sin "-app"): es una copia del 13 de octubre que **nunca se actualizó**. No lo uses ni lo conectes a Render.
 2. **Instala la dependencia:**
    ```
    npm install
@@ -88,7 +90,7 @@ Si cambias el script, publícalo con **Implementar → Administrar implementacio
 >
 > **Traspaso desde la cuenta de Juanes (Semana 1):** Samu crea un servicio nuevo con estos pasos y **las mismas variables** del servicio viejo (Juanes se las pasa por el gestor de contraseñas). Como usa la misma `DATABASE_URL` y la misma `DATA_ENCRYPTION_KEY`, los usuarios y sus datos siguen ahí. Cuando funcione, Juanes suspende su servicio. **La URL de la app cambia**: actualícenla en el `README.md` y en el Apps Script (`URL_APP`).
 
-1. En [render.com](https://render.com) (entra con GitHub; necesitas ser Admin del repositorio): **New → Web Service** → elige el repositorio `autowealth`. Si no aparece, usa **Configure GitHub** para darle acceso a Render.
+1. En [render.com](https://render.com) (entra con GitHub; necesitas ser Admin del repositorio): **New → Web Service** → elige el repositorio `juanesaacosta26/Autowealth-app` (**no** `autowealth`, que es la copia vieja). Si no aparece, ver [Si Render no muestra el repositorio](#si-render-no-muestra-el-repositorio).
 2. Configura:
    - **Branch:** `main`
    - **Region:** Ohio (US East)
@@ -97,11 +99,25 @@ Si cambias el script, publícalo con **Implementar → Administrar implementacio
    - **Instance Type:** Free
 3. **Environment**: agrega las variables de la [sección 5](#5-variables-de-configuración) con los valores de **producción**.
 4. **Deploy Web Service**. En **Logs** debe aparecer `🚀 Auto-Wealth funcionando`.
-5. **Auto-Deploy** queda activado: cada vez que algo se fusiona en `main`, Render publica solo en 2 o 3 minutos. Por eso **a `main` solo llega código revisado** (ver [CONTRIBUTING.md](../CONTRIBUTING.md)).
+5. **Auto-Deploy** (en Settings): elige **After CI Checks Pass**. Así, cada vez que algo se fusiona en `main`, Render espera a que la revisión automática de GitHub salga en verde y publica en 2 o 3 minutos. Si la revisión sale en rojo, no publica. Aun así, **a `main` solo llega código revisado** (ver [CONTRIBUTING.md](../CONTRIBUTING.md)).
 6. **Health Check Path** (en Settings): `/api/salud`. Render revisa con esa ruta que la app esté viva.
 7. **Comprueba con un usuario que ya existía:** si entra y ve sus movimientos sin "(no se pudo leer)", la base de datos y la clave de cifrado quedaron bien.
 
 > **Plan gratuito:** si nadie entra en 15 minutos, el servidor se "duerme". La siguiente visita tarda cerca de 1 minuto. Antes de una presentación, abre el enlace unos minutos antes.
+
+### Si Render no muestra el repositorio
+El repositorio es de la cuenta personal de Juanes, así que Render solo lo ve si **Juanes** le dio permiso a la aplicación de Render en GitHub:
+1. Juanes entra a GitHub → foto de perfil → **Settings** → **Applications** → pestaña **Installed GitHub Apps** → **Render** → **Configure**.
+2. En **Repository access** marca `Autowealth-app` (o *All repositories*) → **Save**.
+3. Samu recarga la página de Render (**New → Web Service**) y el repositorio ya aparece.
+
+**Plan B (si aun así no aparece):** el repositorio es público, así que Render lo puede leer sin permisos:
+1. En **New → Web Service** elige la pestaña **Public Git Repository** y pega `https://github.com/juanesaacosta26/Autowealth-app`. Configura todo igual que arriba.
+2. Con un repositorio público Render **no publica solo**. Para que lo haga: Render → **Settings** → **Deploy Hook** → copia la URL (es secreta: quien la tenga puede forzar despliegues).
+3. En GitHub → repositorio → **Settings** → **Secrets and variables** → **Actions** → **New repository secret**. Nombre `RENDER_DEPLOY_HOOK_URL`, valor la URL del paso 2.
+4. Listo: la revisión automática (`.github/workflows/ci.yml`, paso *Publicar en Render*) llama a esa URL cada vez que algo llega a `main` **y las pruebas pasan**.
+
+> Usa el Deploy Hook **solo** en el plan B. Si Render está conectado a GitHub, no crees el secreto: se publicaría dos veces.
 
 ### Si algo sale mal en el traspaso
 Mientras el servicio viejo de Juanes esté solo **suspendido** (no borrado), se puede reactivar con **Resume Web Service** en un minuto. Por eso se borra una semana después.
@@ -140,7 +156,8 @@ Mientras el servicio viejo de Juanes esté solo **suspendido** (no borrado), se 
 | `❌ No se pudo conectar a la base de datos` | Cadena incompleta, contraseña cambiada o rama borrada en Neon |
 | `Cannot find module 'pg'` | Te faltó `npm install` |
 | `EADDRINUSE` | Ya hay un servidor abierto. Ciérralo con `Ctrl + C` o usa `PORT=3001` |
-| `npm` dice que no encuentra `package.json` | No estás dentro de la carpeta del repositorio (`cd autowealth`) |
+| `npm` dice que no encuentra `package.json` | No estás dentro de la carpeta del repositorio (`cd Autowealth-app`) |
+| El enlace de Render no muestra el panel: `/app` dice "Página no encontrada" | Render publica una versión vieja. En **Settings** revisa que el repositorio sea `juanesaacosta26/Autowealth-app` y la rama `main`, y en **Events** que el último despliegue diga *Live* |
 | Movimientos con "(no se pudo leer)" | Cambió la `DATA_ENCRYPTION_KEY`. Vuelve a poner la original |
 | Al volver del banco: "La solicitud de conexión venció" | Pasaron más de 15 minutos. Empieza de nuevo |
 | Render: `Exited with status 1` | En **Logs** busca la línea con ❌: dice qué variable falta |
