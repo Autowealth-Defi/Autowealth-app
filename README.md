@@ -4,7 +4,7 @@
 
 > Proyecto académico **DEFI JUANES** · Equipo: Juanes, Garavito, Aleja, David y Samu · Presentación final: viernes 20 de noviembre de 2026
 
-**App publicada:** `https://<nombre-del-servicio>.onrender.com` *(Samu: actualiza este enlace a más tardar el miércoles 4 de noviembre)*
+**App publicada:** `https://<nombre-del-servicio>.onrender.com` *(Samu: actualiza este enlace a más tardar el miércoles 4 de noviembre. El enlace viejo `autowealth-app.onrender.com` publica una versión anterior y **no** muestra el panel: no lo usen para la demo)*
 
 ---
 
@@ -28,8 +28,8 @@
 Necesitas **Node.js 20.12 o más reciente** y una base de datos PostgreSQL (rama de Neon: pídela a Garavito).
 
 ```bash
-git clone https://github.com/<organizacion>/autowealth.git
-cd autowealth
+git clone https://github.com/juanesaacosta26/Autowealth-app.git
+cd Autowealth-app
 npm install
 cp .env.example .env        # en Windows: copy .env.example .env
 # Llena en .env: DATABASE_URL, SESSION_SECRET y DATA_ENCRYPTION_KEY
@@ -51,7 +51,7 @@ Guía completa, paso a paso para Windows: **[docs/instalacion-y-despliegue.md](d
 ## Estructura
 
 ```
-autowealth/
+Autowealth-app/
 ├── server.js                 ← Arranque y tabla de rutas (empieza a leer aquí)
 ├── src/
 │   ├── rutas.js              ← API de cuenta: registro, ingreso, sesión

@@ -1,6 +1,7 @@
 # Revisión automática: corre en cada Pull Request y en cada cambio a main.
 # 1) Revisa que todos los archivos JavaScript no tengan errores de sintaxis.
 # 2) Arranca una base de datos PostgreSQL temporal y corre las pruebas (npm test).
+# 3) Solo en main y con las pruebas en verde: avisa a Render que publique (plan B, ver abajo).
 # Si algo falla, el Pull Request muestra una ❌ y no se debe fusionar.
 name: Revisión automática
 
@@ -36,3 +37,23 @@ jobs:
         env:
           TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/autowealth_pruebas
         run: npm test
+
+  # Plan B de Render (docs/instalacion-y-despliegue.md, "Si Render no muestra el repositorio"):
+  # si Render lee el repositorio como público, no publica solo y hay que llamar a su "Deploy Hook".
+  # Sin el secreto RENDER_DEPLOY_HOOK_URL este paso no hace nada (es lo normal si Render está
+  # conectado a GitHub). La URL nunca se imprime: quien la tenga puede forzar despliegues.
+  publicar:
+    needs: pruebas
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Publicar en Render
+        env:
+          RENDER_DEPLOY_HOOK_URL: ${{ secrets.RENDER_DEPLOY_HOOK_URL }}
+        run: |
+          if [ -z "$RENDER_DEPLOY_HOOK_URL" ]; then
+            echo "Sin RENDER_DEPLOY_HOOK_URL: Render publica solo desde GitHub. Nada que hacer."
+            exit 0
+          fi
+          curl -fsS -X POST "$RENDER_DEPLOY_HOOK_URL" > /dev/null
+          echo "Render recibió la orden de publicar. Revisa Render → Events."
