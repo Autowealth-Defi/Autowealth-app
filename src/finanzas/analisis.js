@@ -218,4 +218,27 @@ function resumen({ movimientos, cuentas, mes }) {
   };
 }
 
-module.exports = { resumen, mesesAtras, planDineroOcioso, MESES_RESERVA, CUENTAS_PARA_PAGAR };
+// ------------------------------ PRESUPUESTOS ------------------------------
+// Umbral desde el que un presupuesto pasa a "cerca" (80 % del límite).
+const UMBRAL_CERCA = 0.8;
+
+// Convierte lo gastado y el límite en lo que ve el panel:
+//   bien     → gastaste menos del 80 % del límite
+//   cerca    → entre el 80 % y el 100 % (todavía no te pasas)
+//   excedido → más del 100 %
+// Se compara con la proporción exacta (no con el porcentaje redondeado) para que,
+// por ejemplo, 79,6 % siga siendo "bien" aunque se muestre como 80 %.
+function estadoPresupuesto(gastado, limite) {
+  const proporcion = limite > 0 ? gastado / limite : 0;
+  let estado = 'bien';
+  if (proporcion > 1) estado = 'excedido';
+  else if (proporcion >= UMBRAL_CERCA) estado = 'cerca';
+  return {
+    gastado: redondear(gastado),
+    porcentaje: Math.round(proporcion * 100),
+    disponible: redondear(limite - gastado), // negativo = cuánto te pasaste
+    estado,
+  };
+}
+
+module.exports = { resumen, mesesAtras, planDineroOcioso, estadoPresupuesto, MESES_RESERVA, CUENTAS_PARA_PAGAR };

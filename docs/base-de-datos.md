@@ -19,6 +19,7 @@ erDiagram
     usuarios ||--o{ deudas : registra
     usuarios ||--o{ redirecciones : pide
     usuarios ||--o{ banco_demo_pagos : "(banco de prueba)"
+    usuarios ||--o{ presupuestos : "se pone"
     consentimientos ||--o| conexiones : "da origen a"
     conexiones ||--o{ cuentas : "trae"
     conexiones ||--o{ redirecciones : "paga desde"
@@ -144,6 +145,13 @@ erDiagram
         varchar concepto
         timestamptz creado_en
     }
+    presupuestos {
+        serial id PK
+        int usuario_id FK
+        varchar categoria "una de GASTOS (categorias.js)"
+        numeric limite "límite mensual, > 0"
+        timestamptz creado_en
+    }
 ```
 
 ## Tablas
@@ -159,6 +167,7 @@ erDiagram
 | `auditoria` | Historial de acciones sobre datos financieros | El usuario ve el suyo en "Privacidad". Las acciones válidas están en `src/auditoria.js` |
 | `deudas` | Deudas que el usuario registra a mano | `nombre_cifrado` va **cifrado**. `saldo >= 0` (0 = pagada). Máximo 30 por usuario (lo controla la API) |
 | `redirecciones` | Cada pago o inversión que el usuario pide desde el plan | Es la **prueba de la autorización de cada pago**: guarda la versión del texto aceptado. Se guarda `cuenta_id_externo` y `cuenta_nombre` para que el historial siga legible aunque se revoque el banco. `simulado = true` en todo el prototipo |
+| `presupuestos` | Límite mensual de gasto por categoría | Uno por categoría y usuario (`presupuestos_unico`). **Lo gastado no se guarda**: la API lo calcula con los `movimientos` del mes, así nunca queda desactualizado |
 | `banco_demo_pagos` | **Solo para el banco de prueba**: su "libro" de pagos | La usa `src/openfinance/simulado.js`. Con un banco real no existe: el banco lleva su propio registro |
 
 ### Qué pasa al borrar
@@ -167,10 +176,10 @@ erDiagram
 - **Eliminar una cuenta** borra sus movimientos.
 - **Eliminar una deuda** deja sus pagos en `redirecciones` (con `deuda_id` en NULL).
 - **Revocar un banco** deja las solicitudes de pago en el historial (con `conexion_id` en NULL).
-- **"Borrar mi información financiera"** borra también `deudas` y `redirecciones`.
+- **"Borrar mi información financiera"** borra también `deudas`, `presupuestos` y `redirecciones`.
 
 ### Índices
-`ingresos(usuario_id)`, `ingresos(creado_en)`, `consentimientos(usuario_id)`, `conexiones(usuario_id)`, `cuentas(usuario_id)`, `movimientos(usuario_id, fecha DESC)`, `auditoria(usuario_id, creado_en DESC)`, `deudas(usuario_id)`, `redirecciones(usuario_id, creado_en DESC)` y `banco_demo_pagos(usuario_id, institucion)`. Las consultas del panel siempre filtran por `usuario_id` y fecha.
+`ingresos(usuario_id)`, `ingresos(creado_en)`, `consentimientos(usuario_id)`, `conexiones(usuario_id)`, `cuentas(usuario_id)`, `movimientos(usuario_id, fecha DESC)`, `auditoria(usuario_id, creado_en DESC)`, `deudas(usuario_id)`, `redirecciones(usuario_id, creado_en DESC)` `banco_demo_pagos(usuario_id, institucion)` y el índice que crea sola la restricción `presupuestos_unico (usuario_id, categoria)`. Las consultas del panel siempre filtran por `usuario_id` y fecha.
 
 ## Reglas para escribir consultas
 
@@ -199,15 +208,7 @@ Hoy no hay un sistema de migraciones: `schema.sql` solo **agrega**. Para cambiar
 > ✏️ Propuesta para que Garavito la confirme con Juanes en la Semana 1.
 
 ```sql
--- Presupuesto mensual por categoría de gasto
-CREATE TABLE IF NOT EXISTS presupuestos (
-    id          SERIAL PRIMARY KEY,
-    usuario_id  INTEGER NOT NULL REFERENCES usuarios(id) ON DELETE CASCADE,
-    categoria   VARCHAR(40)   NOT NULL,
-    limite      NUMERIC(16,2) NOT NULL CHECK (limite > 0),
-    creado_en   TIMESTAMPTZ   NOT NULL DEFAULT now(),
-    CONSTRAINT presupuestos_unico UNIQUE (usuario_id, categoria)
-);
+-- (presupuestos: ✅ ya está en src/schema.sql; ver "Tablas" más arriba)
 
 -- Metas de ahorro y sus aportes
 CREATE TABLE IF NOT EXISTS metas (
