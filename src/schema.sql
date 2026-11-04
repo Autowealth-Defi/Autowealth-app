@@ -175,3 +175,19 @@ CREATE TABLE IF NOT EXISTS banco_demo_pagos (
     creado_en          TIMESTAMPTZ   NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS banco_demo_pagos_idx ON banco_demo_pagos (usuario_id, institucion);
+
+-- =====================================================================
+--  PRESUPUESTOS POR CATEGORÍA (noviembre de 2026)
+-- =====================================================================
+
+-- Límite mensual de gasto que el usuario se pone para una categoría (ej. "Restaurantes y domicilios": $400.000).
+-- Lo GASTADO no se guarda aquí: se calcula cada vez con los movimientos del mes, así nunca queda desactualizado.
+-- Un usuario tiene como máximo UN presupuesto por categoría (presupuestos_unico).
+CREATE TABLE IF NOT EXISTS presupuestos (
+    id          SERIAL PRIMARY KEY,
+    usuario_id  INTEGER NOT NULL REFERENCES usuarios(id) ON DELETE CASCADE,
+    categoria   VARCHAR(40)   NOT NULL,                 -- una de GASTOS en src/finanzas/categorias.js
+    limite      NUMERIC(16,2) NOT NULL CHECK (limite > 0),
+    creado_en   TIMESTAMPTZ   NOT NULL DEFAULT now(),
+    CONSTRAINT presupuestos_unico UNIQUE (usuario_id, categoria)
+);

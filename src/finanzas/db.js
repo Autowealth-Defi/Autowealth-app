@@ -305,11 +305,55 @@ async function listarPagosBancoDemo(usuarioId, institucion) {
   return rows;
 }
 
-// Borra cuentas, movimientos, conexiones, deudas y solicitudes de pago
+// -------------------------------- PRESUPUESTOS --------------------------------
+
+// Presupuestos del usuario con lo GASTADO en cada categoría entre "desde" y "hasta" (un mes).
+// Gastado = suma de los gastos (monto < 0) de esa categoría, en positivo. Las devoluciones
+// (montos positivos) no restan, igual que en el resumen (analisis.js → porCategoria).
+async function listarPresupuestos(usuarioId, desde, hasta) {
+  const { rows } = await pool.query(
+    `SELECT p.id, p.categoria, p.limite::float8 AS limite,
+            COALESCE(SUM(-m.monto) FILTER (WHERE m.monto < 0), 0)::float8 AS gastado
+       FROM presupuestos p
+       LEFT JOIN movimientos m
+         ON m.usuario_id = p.usuario_id AND m.categoria = p.categoria
+        AND m.fecha >= $2::date AND m.fecha <= $3::date
+      WHERE p.usuario_id = $1
+      GROUP BY p.id
+      ORDER BY p.categoria`,
+    [usuarioId, desde, hasta]);
+  return rows;
+}
+
+// Devuelve el id nuevo, o null si el usuario YA tiene un presupuesto para esa categoría.
+// ON CONFLICT evita el error aunque dos peticiones lleguen al mismo tiempo.
+async function crearPresupuesto(usuarioId, categoria, limite) {
+  const { rows } = await pool.query(
+    `INSERT INTO presupuestos (usuario_id, categoria, limite) VALUES ($1, $2, $3)
+     ON CONFLICT ON CONSTRAINT presupuestos_unico DO NOTHING
+     RETURNING id`,
+    [usuarioId, categoria, limite]);
+  return rows[0] ? rows[0].id : null;
+}
+
+// true si se cambió; false si no existe o no es de este usuario (→ 404)
+async function actualizarPresupuesto(usuarioId, id, limite) {
+  const { rows } = await pool.query(
+    'UPDATE presupuestos SET limite = $3 WHERE usuario_id = $1 AND id = $2 RETURNING id', [usuarioId, id, limite]);
+  return rows.length > 0;
+}
+
+async function eliminarPresupuesto(usuarioId, id) {
+  const { rows } = await pool.query('DELETE FROM presupuestos WHERE usuario_id = $1 AND id = $2 RETURNING id', [usuarioId, id]);
+  return rows.length > 0;
+}
+
+// Borra cuentas, movimientos, conexiones, deudas, presupuestos y solicitudes de pago
 // (los consentimientos quedan como historial, revocados)
 async function borrarFinanzas(usuarioId) {
   await pool.query('DELETE FROM redirecciones WHERE usuario_id = $1', [usuarioId]);
   await pool.query('DELETE FROM deudas WHERE usuario_id = $1', [usuarioId]);
+  await pool.query('DELETE FROM presupuestos WHERE usuario_id = $1', [usuarioId]);
   await pool.query('DELETE FROM cuentas WHERE usuario_id = $1', [usuarioId]);
   await pool.query('DELETE FROM conexiones WHERE usuario_id = $1', [usuarioId]);
   await pool.query(
@@ -325,4 +369,5 @@ module.exports = {
   listarDeudas, obtenerDeuda, contarDeudas, crearDeuda, actualizarDeuda, eliminarDeuda, abonarDeuda,
   obtenerCuentaParaPago, crearRedireccion, buscarRedireccionPorState, cerrarRedireccion, montoPendiente, listarRedirecciones,
   registrarPagoBancoDemo, listarPagosBancoDemo,
+  listarPresupuestos, crearPresupuesto, actualizarPresupuesto, eliminarPresupuesto,
 };
