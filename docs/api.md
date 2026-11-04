@@ -140,6 +140,49 @@ La página lee el CSV en el navegador y envía solo las filas ya convertidas (m�
 ```
 Usa `cuentaId` (cuenta manual existente) **o** `nombreCuentaNueva`. **201:** `{ "ok": true, "cuentaId": 4, "importados": 3, "duplicados": 0, "invalidas": 2 }`. Importar el mismo archivo dos veces no duplica nada. **429:** más de 20 importaciones en 15 min.
 
+### Presupuestos por categoría
+Un presupuesto es un **límite mensual de gasto para una categoría de gasto** (ej. "Restaurantes y domicilios": $400.000). Cada usuario puede tener **uno por categoría**. Lo gastado **no se guarda**: se calcula cada vez con los movimientos del mes que se pide, así que siempre está al día (también después de sincronizar un banco o de cambiar la categoría de un movimiento).
+
+#### `GET /api/finanzas/presupuestos?mes=YYYY-MM`
+Sin `mes` (o con uno mal escrito) usa el **mes en curso**.
+```json
+{ "ok": true, "mes": "2026-11",
+  "presupuestos": [
+    { "id": 3, "categoria": "Restaurantes y domicilios", "limite": 100000,
+      "gastado": 85000, "porcentaje": 85, "disponible": 15000, "estado": "cerca" }
+  ],
+  "categoriasDisponibles": ["Vivienda", "Mercado", "Transporte", "..."] }
+```
+- `gastado`: suma de los **gastos** (valores negativos) de esa categoría en el mes, en positivo. Las devoluciones o ingresos no lo bajan.
+- `porcentaje`: `gastado ÷ limite × 100`, redondeado. Puede pasar de 100.
+- `disponible`: `limite − gastado`. **Negativo** = cuánto te pasaste.
+- `estado`: `bien` (menos del 80 %), `cerca` (del 80 % al 100 %, incluido gastar justo el límite) o `excedido` (más del 100 %). Se calcula con la proporción exacta, no con el porcentaje redondeado (79,6 % se muestra como 80 % pero sigue en `bien`). **En el panel, muéstralo con texto, no solo con color.**
+- `categoriasDisponibles`: categorías de gasto que todavía no tienen presupuesto (para el selector de "Nuevo presupuesto").
+- Ordenados por nombre de la categoría.
+
+#### `POST /api/finanzas/presupuestos`
+```json
+{ "categoria": "Mercado", "limite": 600000 }
+```
+**201:** `{ "ok": true, "id": 3 }`.
+- `categoria`: una de las categorías de **gasto** de `src/finanzas/categorias.js` (`GASTOS`). Las de ingreso (`Salario`, `Otros ingresos`) no llevan presupuesto.
+- `limite`: número **mayor que 0 y menor que 10.000 millones**. Se redondea a pesos enteros. Un número en texto (`"600000"`) también sirve.
+- **400:** categoría o límite no válidos (el mensaje dice qué corregir). **409:** ya tienes un presupuesto para esa categoría: cambia su límite con `PATCH`.
+
+#### `PATCH /api/finanzas/presupuestos/:id`
+`{ "limite": 750000 }` → `{ "ok": true }`. Solo se puede cambiar el límite (para cambiar de categoría, borra y crea otro). **400:** límite no válido. **404:** no existe o no es tuyo.
+
+#### `DELETE /api/finanzas/presupuestos/:id`
+→ `{ "ok": true }`. **404:** no existe o no es tuyo.
+
+Crear, cambiar y borrar quedan en la `auditoria` (`presupuesto_creado`, `presupuesto_actualizado`, `presupuesto_eliminado`) y se ven en el historial del centro de privacidad.
+
+**Probar con Thunder Client o Postman** (después de `POST /api/ingreso` y con la cabecera `Origin: http://localhost:3000`):
+1. `POST /api/finanzas/presupuestos` con `{ "categoria": "Restaurantes y domicilios", "limite": 100000 }` → 201.
+2. `POST /api/finanzas/movimientos` con `{ "fecha": "<hoy>", "descripcion": "Almuerzo", "valor": 85000, "tipo": "gasto", "categoria": "Restaurantes y domicilios" }`.
+3. `GET /api/finanzas/presupuestos` → `gastado: 85000`, `porcentaje: 85`, `estado: "cerca"`.
+4. Repite el paso 1 → 409.
+
 ---
 
 ## 3. Open Finance — `src/openfinance/index.js` *(requieren sesión)*
@@ -178,8 +221,8 @@ Trae lo nuevo del banco. **200:** `{ "ok": true, "nuevos": 12, "cuentas": 2 }`. 
 | Ruta | Qué hace |
 |---|---|
 | `GET /api/privacidad` | `{ consentimientos: [...], historial: [...], textoConsentimiento }`. El historial son las últimas 60 acciones de la tabla `auditoria` |
-| `GET /api/privacidad/exportar` | Descarga un JSON con **todos** los datos del usuario (derecho de acceso), incluidas `deudas` y `pagos_e_inversiones`. Nunca incluye `password_hash` |
-| `POST /api/privacidad/borrar-finanzas` | `{ "password": "..." }`. Revoca todos los bancos y borra cuentas, movimientos, deudas y solicitudes de pago. **401** si la clave es incorrecta (5 intentos por 15 min) |
+| `GET /api/privacidad/exportar` | Descarga un JSON con **todos** los datos del usuario (derecho de acceso), incluidas `deudas`, `presupuestos` y `pagos_e_inversiones`. Nunca incluye `password_hash` |
+| `POST /api/privacidad/borrar-finanzas` | `{ "password": "..." }`. Revoca todos los bancos y borra cuentas, movimientos, deudas, presupuestos y solicitudes de pago. **401** si la clave es incorrecta (5 intentos por 15 min) |
 | `POST /api/privacidad/eliminar-cuenta` | `{ "password": "..." }`. Borra al usuario y todo lo relacionado, y cierra la sesión |
 
 ---
@@ -195,15 +238,9 @@ Protegido con usuario y contraseña del navegador (`ADMIN_USER` / `ADMIN_PASSWOR
 
 > ✏️ **PROPUESTA para que Juanes la confirme o ajuste en la Semana 1** (ver [plan de trabajo](plan-de-trabajo/README.md)). Cuando esté acordada, David y Aleja construyen las pantallas con estos formatos aunque el código todavía no exista.
 
-### Presupuestos por categoría
-| Método y ruta | Cuerpo | Respuesta |
-|---|---|---|
-| `GET /api/finanzas/presupuestos?mes=YYYY-MM` | — | `{ ok, presupuestos: [ { id, categoria, limite, gastado, porcentaje, estado: "bien | cerca | excedido" } ] }` |
-| `POST /api/finanzas/presupuestos` | `{ categoria, limite }` | **201** `{ ok, id }`. Una categoría de gasto por usuario; **409** si ya existe |
-| `PATCH /api/finanzas/presupuestos/:id` | `{ limite }` | `{ ok }` |
-| `DELETE /api/finanzas/presupuestos/:id` | — | `{ ok }` |
-
-`estado`: `cerca` desde el 80 % del límite, `excedido` por encima del 100 %. El resumen (`/api/finanzas/resumen`) agrega una recomendación cuando un presupuesto se excede.
+### Presupuestos por categoría · ✅ implementado
+Ya funciona: el contrato definitivo está en [§2 · Presupuestos por categoría](#presupuestos-por-categoría). Cumple lo propuesto y **agrega** (sin quitar nada) `mes` en la respuesta, y `disponible` y `categoriasDisponibles` para facilitar la pantalla.
+Pendiente para la Semana B: que el resumen (`/api/finanzas/resumen`) agregue una recomendación cuando un presupuesto esté `cerca` o `excedido`.
 
 ### Metas de ahorro
 | Método y ruta | Cuerpo | Respuesta |
