@@ -1,7 +1,7 @@
 // =====================================================================
 //  inicio.js — Lógica de la página de inicio (/): tema claro/oscuro, animaciones,
 //  registro e inicio de sesión. Responsable: Aleja.
-//  Llama a la API: /api/registro, /api/ingreso, /api/yo.
+//  Llama a la API: /api/registro, /api/ingreso, /api/recuperar, /api/yo.
 // =====================================================================
 (function() {
     'use strict';
@@ -44,14 +44,19 @@
     const toggleText = document.getElementById('toggleText');
     const loginFields = document.getElementById('loginFields');
     const registerFields = document.getElementById('registerFields');
+    const recoveryFields = document.getElementById('recoveryFields');
+    const forgotPasswordLink = document.getElementById('forgotPasswordLink');
     const authTitle = document.getElementById('authTitle');
     const authSub = document.getElementById('authSub');
     let isLogin = true;
+    let isRecovering = false;
 
     function openOverlay(mode) {
+        isRecovering = false;
         isLogin = (mode === 'login');
         overlay.classList.add('active');
         document.body.style.overflow = 'hidden';
+        recoveryFields.style.display = 'none';
         if (isLogin) {
             authTitle.textContent = 'Bienvenido de vuelta';
             authSub.textContent = 'Inicia sesión en tu cuenta';
@@ -98,7 +103,9 @@
         if (busy) authSubmitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> ' + label;
     }
     function resetSubmitLabel() {
-        authSubmitBtn.innerHTML = isLogin
+        authSubmitBtn.innerHTML = isRecovering
+            ? '<i class="fas fa-envelope"></i> Enviar enlace'
+            : isLogin
             ? '<i class="fas fa-sign-in-alt"></i> Iniciar sesión'
             : '<i class="fas fa-user-plus"></i> Registrarse';
     }
@@ -121,6 +128,21 @@
         if (!r.ok) throw new Error(r.error || 'Algo salió mal. Intenta de nuevo.');
         return r;
     }
+
+    forgotPasswordLink.addEventListener('click', () => {
+        isLogin = true;
+        isRecovering = true;
+        loginFields.style.display = 'none';
+        registerFields.style.display = 'none';
+        recoveryFields.style.display = 'block';
+        authTitle.textContent = 'Recuperar contraseña';
+        authSub.textContent = 'Escribe el correo asociado a tu cuenta y te enviaremos un enlace.';
+        document.getElementById('recoveryEmail').value = document.getElementById('authEmail').value.trim();
+        authSubmitBtn.innerHTML = '<i class="fas fa-envelope"></i> Enviar enlace';
+        toggleText.innerHTML = '<a id="toggleAuthLink">Volver a iniciar sesión</a>';
+        document.getElementById('toggleAuthLink').addEventListener('click', () => openOverlay('login'));
+        showAuthMsg('');
+    });
 
     // ----- Estado de la sesión en la barra superior -----
     function mostrarSesion(nombre) {
@@ -172,7 +194,13 @@
         e.preventDefault();
         showAuthMsg('');
         try {
-            if (isLogin) {
+            if (isRecovering) {
+                const email = document.getElementById('recoveryEmail').value.trim().toLowerCase();
+                if (!isValidEmail(email)) { showAuthMsg('Escribe un correo válido.', true); return; }
+                setBusy(true, 'Enviando...');
+                await api('/api/recuperar', { email });
+                showAuthMsg('Si ese correo está registrado, te enviamos un enlace para crear una contraseña nueva. Revisa también spam.', false);
+            } else if (isLogin) {
                 const email = document.getElementById('authEmail').value.trim().toLowerCase();
                 const password = document.getElementById('authPassword').value;
                 if (!isValidEmail(email) || !password) { showAuthMsg('Escribe tu correo y tu contraseña.', true); return; }
