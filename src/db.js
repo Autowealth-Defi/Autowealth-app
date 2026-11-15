@@ -112,9 +112,50 @@ async function eliminarUsuario(id) {
   await pool.query('DELETE FROM usuarios WHERE id = $1', [id]);
 }
 
+// ----------------------- RECUPERACIÓN DE CONTRASEÑA ----------------------
+
+async function crearTokenRecuperacion(usuarioId, tokenHash, expiraEn) {
+  // Invalida tokens anteriores del mismo usuario antes de crear el nuevo
+  await pool.query(
+    'UPDATE tokens_recuperacion SET usado_en = now() WHERE usuario_id = $1 AND usado_en IS NULL',
+    [usuarioId]
+  );
+  await pool.query(
+    `INSERT INTO tokens_recuperacion (usuario_id, token_hash, expira_en)
+     VALUES ($1, $2, $3)`,
+    [usuarioId, tokenHash, expiraEn]
+  );
+}
+
+async function buscarTokenRecuperacion(tokenHash) {
+  const { rows } = await pool.query(
+    `SELECT id, usuario_id, expira_en FROM tokens_recuperacion
+      WHERE token_hash = $1
+        AND usado_en IS NULL
+        AND expira_en > now()`,
+    [tokenHash]
+  );
+  return rows[0] || null;
+}
+
+async function marcarTokenUsado(id) {
+  await pool.query('UPDATE tokens_recuperacion SET usado_en = now() WHERE id = $1', [id]);
+}
+
+async function cambiarPassword(usuarioId, nuevoHash) {
+  await pool.query(
+    `UPDATE usuarios
+        SET password_hash    = $2,
+            version_sesion   = version_sesion + 1
+      WHERE id = $1`,
+    [usuarioId, nuevoHash]
+  );
+}
+
 module.exports = {
   pool, buscarUsuarioCompleto, eliminarUsuario,
   inicializar, crearUsuario, buscarUsuarioPorEmail, buscarUsuarioPorId,
   marcarCorreoEnviado, marcarCorreoFallido, registrarIngreso,
   listarUsuarios, listarIngresos, verificarConexion, cerrar,
+ crearTokenRecuperacion, buscarTokenRecuperacion, marcarTokenUsado, cambiarPassword,
 };

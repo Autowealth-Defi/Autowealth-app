@@ -175,3 +175,56 @@ CREATE TABLE IF NOT EXISTS banco_demo_pagos (
     creado_en          TIMESTAMPTZ   NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS banco_demo_pagos_idx ON banco_demo_pagos (usuario_id, institucion);
+
+-- =====================================================================
+--  PRESUPUESTOS Y METAS (noviembre de 2026)
+-- =====================================================================
+
+-- Presupuesto mensual por categoría (ej. "alimentacion" → 400 000 COP)
+CREATE TABLE IF NOT EXISTS presupuestos (
+    id          SERIAL PRIMARY KEY,
+    usuario_id  INTEGER NOT NULL REFERENCES usuarios(id) ON DELETE CASCADE,
+    mes         CHAR(7)       NOT NULL,              -- formato 'YYYY-MM'
+    categoria   VARCHAR(40)   NOT NULL,
+    limite      NUMERIC(16,2) NOT NULL CHECK (limite > 0),
+    creado_en   TIMESTAMPTZ   NOT NULL DEFAULT now(),
+    CONSTRAINT presupuestos_unico UNIQUE (usuario_id, mes, categoria)
+);
+CREATE INDEX IF NOT EXISTS presupuestos_usuario_idx ON presupuestos (usuario_id, mes);
+
+-- Meta de ahorro (ej. "Viaje a Cartagena")
+CREATE TABLE IF NOT EXISTS metas (
+    id              SERIAL PRIMARY KEY,
+    usuario_id      INTEGER NOT NULL REFERENCES usuarios(id) ON DELETE CASCADE,
+    nombre          VARCHAR(120)  NOT NULL,
+    objetivo        NUMERIC(16,2) NOT NULL CHECK (objetivo > 0),
+    plazo           DATE          NOT NULL,          -- fecha límite
+    creado_en       TIMESTAMPTZ   NOT NULL DEFAULT now(),
+    actualizado_en  TIMESTAMPTZ   NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS metas_usuario_idx ON metas (usuario_id);
+
+-- Aportes que el usuario hace a una meta
+CREATE TABLE IF NOT EXISTS aportes_meta (
+    id          SERIAL PRIMARY KEY,
+    usuario_id  INTEGER NOT NULL REFERENCES usuarios(id) ON DELETE CASCADE,
+    meta_id     INTEGER NOT NULL REFERENCES metas(id) ON DELETE CASCADE,
+    monto       NUMERIC(16,2) NOT NULL CHECK (monto > 0),
+    nota        VARCHAR(200),
+    creado_en   TIMESTAMPTZ   NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS aportes_meta_idx ON aportes_meta (meta_id);
+
+-- Tokens de un solo uso para recuperar la contraseña por correo
+CREATE TABLE IF NOT EXISTS tokens_recuperacion (
+    id          SERIAL PRIMARY KEY,
+    usuario_id  INTEGER NOT NULL REFERENCES usuarios(id) ON DELETE CASCADE,
+    token_hash  TEXT          NOT NULL UNIQUE,       -- nunca el token real, solo su hash
+    expira_en   TIMESTAMPTZ   NOT NULL,
+    usado_en    TIMESTAMPTZ,                         -- NULL = todavía válido
+    creado_en   TIMESTAMPTZ   NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS tokens_recuperacion_usuario_idx ON tokens_recuperacion (usuario_id);
+
+-- Columna para invalidar sesiones antiguas al cambiar la contraseña
+ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS version_sesion INTEGER NOT NULL DEFAULT 1;
