@@ -220,7 +220,7 @@ fieldset.destinos legend { font-size: .85rem; font-weight: 600; color: var(--tex
 @media (max-width: 560px) { .consejos li:has(.btn) { flex-wrap: wrap; } .consejos li:has(.btn) > span { flex: 1 1 calc(100% - 30px); } .consejos li .btn { margin-left: 30px; } }
 
 .metas li > div { flex: 1; min-width: 0; }
-.metas .detalle { display: block; color: var(--muted); font-size: .86rem; margin-top: 2px; }
+.metas .detalle { display: block; color: var(--text-2); font-size: .86rem; margin-top: 2px; }
 .metas .acciones { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 10px; }
 .metas .acciones .borrar { margin-left: auto; }
 
