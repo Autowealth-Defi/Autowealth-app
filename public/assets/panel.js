@@ -391,13 +391,55 @@
   }
 
   // Paso 4: estructura vacía. El dibujo real llega en los pasos 6 a 8 y las llamadas a api() en el Bloque A.
+    // ----- Presupuestos -----
+  // [texto, clase (la misma de .chip, .relleno e .ico), ícono]. Los íconos son los de #consejos en el Resumen.
+  const ESTADOS_PRESUPUESTO = {
+    bien: ['Vas bien', 'ok', 'fa-circle-check'],
+    cerca: ['Cerca del límite', 'warn', 'fa-triangle-exclamation'],
+    excedido: ['Te pasaste', 'bad', 'fa-circle-exclamation'],
+  };
+
   async function cargarMetas() {
     const mes = estado.mes || mesPorDefecto();
     $('#metasMes').textContent = 'Presupuestos de ' + nombreMes(mes);
-    $('#listaPresupuestos').innerHTML = '<p class="vacio" style="text-align:left;padding:12px 0">Aún no tienes presupuestos. Crea uno para ponerle un tope a una categoría.</p>';
+    const p = await api('/api/finanzas/presupuestos?mes=' + encodeURIComponent(mes));
+    estado.presupuestos = p.presupuestos;
+    dibujarPresupuestos(p.presupuestos, mes);
+    // Metas: se dibujan en el paso 8
     $('#listaMetas').innerHTML = '';
     $('#metasVacio').hidden = false;
   }
+
+  // Filas al estilo de "Tus deudas" (.deuda-fila); la barra comparte el estilo de dibujarCategorias (.pista/.relleno)
+  function dibujarPresupuestos(lista, mes) {
+    const cont = $('#listaPresupuestos');
+    if (!lista.length) { cont.innerHTML = '<p class="vacio" role="listitem" style="text-align:left;padding:12px 0">Aún no tienes presupuestos. Crea uno para ponerle un tope a una categoría.</p>'; return; }
+    const esActual = mes === hoy().slice(0, 7);
+    const orden = [...lista].sort((a, b) => (Number(b.porcentaje) || 0) - (Number(a.porcentaje) || 0));
+    cont.innerHTML = orden.map((p) => {
+      const [txt, cls, ico] = ESTADOS_PRESUPUESTO[p.estado] || ['Sin estado', '', 'fa-circle-info'];
+      const pct = Number(p.porcentaje) || 0, resto = p.limite - p.gastado;
+      const linea = resto >= 0 ? `${esActual ? 'Te quedan' : 'Sobraron'} ${pesos(resto)}` : `${pesos(resto)} por encima del límite`;
+      const cat = esc(p.categoria), id = esc(p.id);
+      return `<div class="deuda-fila" role="listitem">
+        <span class="ico ${cls}"><i class="fas ${ico}" aria-hidden="true"></i></span>
+        <div style="min-width:0"><b>${cat}</b> <span class="chip ${cls}"><i class="fas ${ico}" aria-hidden="true"></i>${txt}</span>
+          <div class="progreso" aria-hidden="true"><span class="relleno ${cls}" style="width:${Math.min(100, Math.max(pct > 0 ? 2 : 0, pct))}%"></span></div>
+          <span class="detalle">${Math.round(pct)} % · ${linea}</span></div>
+        <span class="num" style="text-align:right"><b>${pesos(p.gastado)}</b><br><span class="detalle">de ${pesos(p.limite)}</span></span>
+        <span class="acciones-fila">
+          <button type="button" class="borrar" data-ver-cat="${cat}" aria-label="Ver los gastos de ${cat}"><i class="fas fa-list" aria-hidden="true"></i></button>
+          <button type="button" class="borrar" data-editar-presupuesto="${id}" aria-label="Editar el presupuesto de ${cat}"><i class="fas fa-pen" aria-hidden="true"></i></button>
+          <button type="button" class="borrar" data-borrar-presupuesto="${id}" data-nombre="${cat}" aria-label="Borrar el presupuesto de ${cat}"><i class="fas fa-trash-can" aria-hidden="true"></i></button>
+        </span>
+      </div>`;
+    }).join('');
+  }
+  // Ver gastos → Movimientos filtrado (mismo patrón que dibujarCategorias). Editar y borrar se agregan en el paso 7.
+  $('#listaPresupuestos').addEventListener('click', (e) => {
+    const ver = e.target.closest('[data-ver-cat]');
+    if (ver) { estado.filtroCategoria = ver.dataset.verCat; abrirPestana('movimientos'); }
+  });
   
   // ================= Deudas y plan =================
   // El plan lo calcula el servidor (GET /api/finanzas/plan). Aquí solo se muestra y se piden los pagos.
@@ -849,6 +891,5 @@
     error: ['bad', 'No pudimos confirmar el pago con tu banco. Revisa el historial antes de intentarlo de nuevo.'],
   };
   if (MENSAJES_PAGO[pago]) { aviso(...MENSAJES_PAGO[pago]); history.replaceState(null, '', location.pathname + location.hash); }
-
   abrirPestana((location.hash || '#resumen').slice(1));
 })();

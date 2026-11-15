@@ -111,8 +111,8 @@ details.tabla-alt td:first-child, details.tabla-alt th:first-child { text-align:
 .barra-cat { display: grid; grid-template-columns: minmax(110px, 38%) 1fr auto; gap: 10px; align-items: center; background: none; border: 0; padding: 2px 0; text-align: left; cursor: pointer; border-radius: 6px; }
 .barra-cat:hover .nombre { color: var(--accent); }
 .barra-cat .nombre { font-size: .9rem; color: var(--text-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.barra-cat .pista { height: 12px; border-radius: 0 4px 4px 0; background: var(--grid); position: relative; overflow: hidden; }
-.barra-cat .relleno { position: absolute; inset: 0 auto 0 0; background: var(--serie-ingresos); border-radius: 0 4px 4px 0; }
+.barra-cat .pista, .progreso { height: 12px; border-radius: 0 4px 4px 0; background: var(--grid); position: relative; overflow: hidden; }
+.barra-cat .relleno, .progreso .relleno { position: absolute; inset: 0 auto 0 0; background: var(--serie-ingresos); border-radius: 0 4px 4px 0; }
 .barra-cat .valor { font-size: .88rem; font-weight: 600; text-align: right; min-width: 92px; }
 
 /* ---------- Recomendaciones y listas ---------- */
@@ -208,6 +208,13 @@ fieldset.destinos legend { font-size: .85rem; font-weight: 600; color: var(--tex
   .deuda-fila .acciones-fila { grid-column: 2 / -1; justify-content: flex-end; }
   .ecuacion .signo { display: none; }
 }
+
+/* ---------- Metas y presupuestos ---------- */
+/* .progreso comparte la regla de .barra-cat .pista/.relleno (sección Gráficas). Aquí solo margen y color por estado, con el mismo vocabulario de .chip (ok / warn / bad). */
+.progreso { margin: 8px 0 4px; }
+.progreso .relleno.ok { background: var(--ok); } .progreso .relleno.warn { background: var(--warn); } .progreso .relleno.bad { background: var(--bad); }
+.deuda-fila .ico.ok { background: var(--ok-bg); color: var(--ok); } .deuda-fila .ico.warn { background: var(--warn-bg); color: var(--warn); } .deuda-fila .ico.bad { background: var(--bad-bg); color: var(--bad); }
+[role="list"] > .deuda-fila:last-child { border-bottom: 0; }
 
 /* ---------- Cuentas ---------- */
 .tarjeta-banco { display: flex; flex-wrap: wrap; gap: 12px 20px; align-items: center; justify-content: space-between; padding: 16px 0; border-bottom: 1px solid var(--border); }
