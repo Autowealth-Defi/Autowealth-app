@@ -312,14 +312,93 @@
     else if (/^-?\d{1,3}(\.\d{3})+$/.test(s)) s = s.replace(/\./g, '');
     return Number(s);
   }
+  
     // ================= Metas y presupuestos =================
+  // Utilidades de mes. Las usan datosEjemplo() y cargarMetas().
+  const sumarMeses = (m, n) => { const [a, mm] = m.split('-').map(Number); const t = a * 12 + (mm - 1) + n; return `${Math.floor(t / 12)}-${String((t % 12) + 1).padStart(2, '0')}`; };
+  const mesesEntre = (desde, hasta) => { const [a1, m1] = desde.split('-').map(Number), [a2, m2] = hasta.split('-').map(Number); return (a2 * 12 + m2) - (a1 * 12 + m1); };
+  // Misma regla que GET /api/finanzas/resumen (api.md §2): durante los primeros 9 días del mes se usa el mes anterior
+  const mesPorDefecto = () => (Number(hoy().slice(8, 10)) <= 9 ? sumarMeses(hoy().slice(0, 7), -1) : hoy().slice(0, 7));
+
+  // TEMPORAL (se borra en el Bloque A1): respuestas de ejemplo con la MISMA forma que api.md
+  function datosEjemplo() {
+    const mes = mesPorDefecto(), mesHoy = hoy().slice(0, 7);
+    const dia = (d) => `${mes}-${String(d).padStart(2, '0')}`;
+    const fechaEn = (meses) => sumarMeses(mesHoy, meses) + '-15';
+
+    const categorias = { ingresos: ['Salario', 'Otros ingresos'], gastos: ['Vivienda', 'Mercado', 'Restaurantes y domicilios', 'Transporte', 'Suscripciones', 'Deudas y créditos', 'Otros gastos'], neutra: 'Movimiento entre cuentas' };
+    const movimientos = [
+      [1, 1, 4200000, 'Salario', 'NÓMINA EMPRESA'],
+      [2, 1, -1200000, 'Vivienda', 'ARRIENDO APARTAMENTO'],
+      [3, 2, -186200, 'Mercado', 'MERCADO SEMANAL'],
+      [4, 6, -132200, 'Mercado', 'FRUVER LA 45'],
+      [5, 3, -48900, 'Restaurantes y domicilios', 'RAPPI'],
+      [6, 4, -18000, 'Restaurantes y domicilios', 'ALMUERZO CORRIENTAZO'],
+      [7, 7, -305000, 'Restaurantes y domicilios', 'CENA DE CUMPLEAÑOS'],
+      [8, 2, -38300, 'Transporte', 'UBER'],
+      [9, 5, -180000, 'Transporte', 'GASOLINA'],
+      [10, 8, -44000, 'Transporte', 'PARQUEADERO CENTRO'],
+    ].map(([id, d, monto, categoria, descripcion]) => ({ id, cuenta_id: 1, origen: 'manual', fecha: dia(d), monto, categoria, cuenta: 'Efectivo y otros', cuenta_tipo: 'efectivo', descripcion }))
+      .sort((a, b) => b.fecha.localeCompare(a.fecha));
+
+    const ingresos = movimientos.filter((m) => m.monto > 0).reduce((a, m) => a + m.monto, 0);
+    const gastos = movimientos.filter((m) => m.monto < 0).reduce((a, m) => a - m.monto, 0);
+    const gastadoPor = {};
+    movimientos.filter((m) => m.monto < 0).forEach((m) => { gastadoPor[m.categoria] = (gastadoPor[m.categoria] || 0) - m.monto; });
+    const porCategoria = Object.entries(gastadoPor).map(([categoria, total]) => ({ categoria, total })).sort((a, b) => b.total - a.total);
+
+    // Presupuestos: regla de api.md §6 → "cerca" desde el 80 %, "excedido" por encima del 100 %
+    const presupuesto = (id, categoria, limite) => {
+      const gastado = gastadoPor[categoria] || 0;
+      return { id, categoria, limite, gastado, porcentaje: Math.round(gastado / limite * 100), estado: gastado > limite ? 'excedido' : gastado >= limite * 0.8 ? 'cerca' : 'bien' };
+    };
+    const presupuestos = [
+      presupuesto(1, 'Mercado', 600000),
+      presupuesto(2, 'Restaurantes y domicilios', 400000),
+      presupuesto(3, 'Transporte', 200000),
+    ];
+
+    // Metas: aporteMensualSugerido = lo que falta ÷ meses que quedan (api.md §6). Sin fecha → null (supuesto, duda 2 para Juanes).
+    const meta = (id, nombre, objetivo, ahorrado, fechaLimite) => {
+      const falta = Math.max(0, objetivo - ahorrado);
+      const aporteMensualSugerido = fechaLimite ? Math.ceil(falta / Math.max(1, mesesEntre(mesHoy, fechaLimite.slice(0, 7)))) : null;
+      return { id, nombre, objetivo, ahorrado, porcentaje: Math.round(ahorrado / objetivo * 100), fechaLimite, aporteMensualSugerido };
+    };
+    const metas = [
+      meta(1, 'Viaje a Cartagena', 3000000, 1200000, fechaEn(7)),
+      meta(2, 'Portátil nuevo 💻', 2500000, 650000, null),
+      meta(3, 'Regalo de cumpleaños de mamá', 400000, 400000, fechaEn(1)),
+      meta(4, 'Matrícula del semestre', 1800000, 900000, fechaEn(-1)),
+    ];
+
+    const previos = [[4200000, 3950370], [4200000, 3610000], [4350000, 3880500], [4200000, 3420900], [4200000, 3705600]];
+    const serie = previos.map(([i, g], k) => ({ mes: sumarMeses(mes, k - 5), ingresos: i, gastos: g })).concat({ mes, ingresos, gastos });
+    const disponible = 5300000;
+    const resumen = {
+      ok: true, usuario: { nombre: 'Ana' }, mesesDisponibles: serie.map((s) => s.mes).reverse(),
+      cuentas: [{ id: 1, origen: 'manual', nombre: 'Efectivo y otros', tipo: 'efectivo', numero_ultimos4: null, institucion: null, saldo: disponible, num_movimientos: movimientos.length }],
+      conexiones: [], mes, ingresos, gastos, ahorro: ingresos - gastos, tasaAhorro: Math.round((ingresos - gastos) / ingresos * 100),
+      disponible, deudaTarjetas: 0, mesesFondo: 1.5, serie, porCategoria, suscripciones: [], hormiga: { cantidad: 0, total: 0 },
+      recomendaciones: presupuestos.filter((p) => p.estado === 'excedido').map((p) => ({ tipo: 'alerta', texto: `Te pasaste del presupuesto de ${p.categoria}: llevas ${pesos(p.gastado)} de ${pesos(p.limite)}.` })),
+    };
+
+    return {
+      '/api/finanzas/resumen': resumen,
+      '/api/finanzas/movimientos': { ok: true, movimientos, categorias },
+      '/api/finanzas/presupuestos': { ok: true, presupuestos },
+      '/api/finanzas/metas': { ok: true, metas },
+    };
+  }
+
+  // Paso 4: estructura vacía. El dibujo real llega en los pasos 6 a 8 y las llamadas a api() en el Bloque A.
   async function cargarMetas() {
-    const mes = estado.mes || hoy().slice(0, 7);
+    const mes = estado.mes || mesPorDefecto();
     $('#metasMes').textContent = 'Presupuestos de ' + nombreMes(mes);
     $('#listaPresupuestos').innerHTML = '<p class="vacio" style="text-align:left;padding:12px 0">Aún no tienes presupuestos. Crea uno para ponerle un tope a una categoría.</p>';
     $('#listaMetas').innerHTML = '';
     $('#metasVacio').hidden = false;
   }
+  
   // ================= Deudas y plan =================
   // El plan lo calcula el servidor (GET /api/finanzas/plan). Aquí solo se muestra y se piden los pagos.
   // Todo pago se confirma en el banco: esta página nunca mueve dinero por sí sola.
