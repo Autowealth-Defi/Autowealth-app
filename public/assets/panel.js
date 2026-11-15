@@ -397,12 +397,16 @@
   async function apiEjemplo(ruta, { method = 'GET', body } = {}) {
     await new Promise((r) => setTimeout(r, 250));
     const variante = new URLSearchParams(location.search).get('ejemplo');
-    if (variante === 'error') throw new Error('Error simulado del servidor (modo de ejemplo).');
+    const esDeMetas = /^\/api\/finanzas\/(presupuestos|metas)/.test(ruta.split('?')[0]);
+    if (variante === 'error' || variante === 'error500') throw Object.assign(new Error('Error simulado del servidor.'), { status: 500 });
+    if (variante === 'error429') throw Object.assign(new Error('Demasiados intentos (simulado).'), { status: 429 });
+    if (variante === 'sin-rutas' && esDeMetas) throw Object.assign(new Error('Respuesta inesperada del servidor.'), { status: 404 });
+    if (variante === 'perdidos' && esDeMetas && method !== 'GET' && /\/\d+(\/aportes)?$/.test(ruta)) throw Object.assign(new Error('No existe (simulado).'), { status: 404 });
     if (!bdEjemplo) {
       bdEjemplo = datosEjemplo();
       if (variante === 'vacio') { bdEjemplo['/api/finanzas/presupuestos'].presupuestos = []; bdEjemplo['/api/finanzas/metas'].metas = []; }
     }
-    const camino = ruta.split('?')[0], copia = (x) => JSON.parse(JSON.stringify(x)), falla = (msg) => { throw new Error(msg); };
+    const camino = ruta.split('?')[0], copia = (x) => JSON.parse(JSON.stringify(x)), falla = (msg, status = 400) => { throw Object.assign(new Error(msg), { status }); };
     const movs = bdEjemplo['/api/finanzas/movimientos'].movimientos, cats = bdEjemplo['/api/finanzas/movimientos'].categorias;
     const P = bdEjemplo['/api/finanzas/presupuestos'].presupuestos, M = bdEjemplo['/api/finanzas/metas'].metas;
     const nuevoId = (lista) => Math.max(0, ...lista.map((x) => x.id)) + 1;
