@@ -402,12 +402,10 @@
   async function cargarMetas() {
     const mes = estado.mes || mesPorDefecto();
     $('#metasMes').textContent = 'Presupuestos de ' + nombreMes(mes);
-    const p = await api('/api/finanzas/presupuestos?mes=' + encodeURIComponent(mes));
-    estado.presupuestos = p.presupuestos;
+    const [p, m] = await Promise.all([api('/api/finanzas/presupuestos?mes=' + encodeURIComponent(mes)), api('/api/finanzas/metas')]);
+    estado.presupuestos = p.presupuestos; estado.metas = m.metas;
     dibujarPresupuestos(p.presupuestos, mes);
-    // Metas: se dibujan en el paso 8
-    $('#listaMetas').innerHTML = '';
-    $('#metasVacio').hidden = false;
+    dibujarMetas(m.metas);
   }
 
   // Filas al estilo de "Tus deudas" (.deuda-fila); la barra comparte el estilo de dibujarCategorias (.pista/.relleno)
@@ -477,6 +475,89 @@
       confirmar({ titulo: `Borrar el presupuesto de ${bo.dataset.nombre}`, texto: 'Dejarás de ver el tope y los avisos de esta categoría. Tus movimientos no se borran.', boton: 'Borrar presupuesto' }, async () => {
         await api('/api/finanzas/presupuestos/' + encodeURIComponent(bo.dataset.borrarPresupuesto), { method: 'DELETE' });
         toast('Presupuesto borrado'); await cargarMetas();
+      });
+    }
+  });
+
+    // ----- Metas -----
+  function estadoMeta(m) {
+    if (m.ahorrado >= m.objetivo) return { cumplida: true, cls: 'bien', ico: 'fa-circle-check', relleno: 'ok', chip: '<span class="chip ok"><i class="fas fa-circle-check" aria-hidden="true"></i>Meta cumplida</span>' };
+    if (m.fechaLimite && m.fechaLimite.slice(0, 10) < hoy()) return { vencida: true, cls: 'atencion', ico: 'fa-triangle-exclamation', relleno: 'warn', chip: `<span class="chip warn"><i class="fas fa-triangle-exclamation" aria-hidden="true"></i>Venció el ${esc(fechaCorta(m.fechaLimite))}</span>` };
+    if (m.fechaLimite) return { cls: 'info', ico: 'fa-bullseye', relleno: '', chip: `<span class="chip"><i class="fas fa-calendar" aria-hidden="true"></i>Hasta ${esc(fechaCorta(m.fechaLimite))}</span>` };
+    return { cls: 'info', ico: 'fa-bullseye', relleno: '', chip: '<span class="chip">Sin fecha límite</span>' };
+  }
+  function dibujarMetas(lista) {
+    const ul = $('#listaMetas');
+    $('#metasVacio').hidden = lista.length > 0;
+    ul.hidden = !lista.length;
+    ul.innerHTML = lista.map((m) => {
+      const e = estadoMeta(m), nombre = esc(m.nombre), id = esc(m.id);
+      const pct = Number(m.porcentaje) || 0, falta = Math.max(0, m.objetivo - m.ahorrado);
+      const consejo = e.cumplida ? `Lo lograste: ahorraste ${pesos(m.ahorrado)}.`
+        : e.vencida ? `Te faltan ${pesos(falta)}. Puedes seguir aportando o borrar la meta.`
+          : m.aporteMensualSugerido != null ? `Ahorra ${pesos(m.aporteMensualSugerido)} al mes para llegar a tiempo.`
+            : `Te faltan ${pesos(falta)}. Aporta a tu ritmo.`;
+      return `<li class="${e.cls}"><i class="fas ${e.ico}" aria-hidden="true"></i><div>
+        <b>${nombre}</b> ${e.chip}
+        <div class="progreso" aria-hidden="true"><span class="relleno ${e.relleno}" style="width:${Math.min(100, Math.max(pct > 0 ? 2 : 0, pct))}%"></span></div>
+        <span class="num">${pesos(m.ahorrado)}</span> de <span class="num">${pesos(m.objetivo)}</span> <span class="num">· ${Math.round(pct)} %</span>
+        <span class="detalle">${consejo}</span>
+        <div class="acciones">
+          ${e.cumplida ? '' : `<button type="button" class="btn chico" data-aportar="${id}" aria-label="Aportar a ${nombre}"><i class="fas fa-plus" aria-hidden="true"></i> Aportar</button>`}
+          ${m.ahorrado > 0 ? `<button type="button" class="btn chico" data-retirar="${id}" aria-label="Retirar de ${nombre}"><i class="fas fa-minus" aria-hidden="true"></i> Retirar</button>` : ''}
+          <button type="button" class="borrar" data-borrar-meta="${id}" data-nombre="${nombre}" aria-label="Borrar la meta ${nombre}"><i class="fas fa-trash-can" aria-hidden="true"></i></button>
+        </div></div></li>`;
+    }).join('');
+  }
+
+  function abrirMeta() {
+    $('#mtNombre').value = ''; $('#mtObjetivo').value = ''; $('#mtFecha').value = ''; $('#mtFecha').min = hoy(); $('#mtError').hidden = true;
+    $('#dlgMeta').showModal(); $('#mtNombre').focus();
+  }
+  $('#btnNuevaMeta').addEventListener('click', abrirMeta);
+  $('#btnPrimeraMeta').addEventListener('click', abrirMeta);
+  $('#formMeta').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const btn = $('#mtGuardar'); btn.disabled = true; $('#mtError').hidden = true;
+    const objetivo = leerNumero($('#mtObjetivo').value);
+    try {
+      if (!Number.isFinite(objetivo) || objetivo <= 0) throw new Error('Escribe cuánto quieres ahorrar, por ejemplo 3.000.000.');
+      await api('/api/finanzas/metas', { method: 'POST', body: { nombre: $('#mtNombre').value.trim(), objetivo, fechaLimite: $('#mtFecha').value || null } });
+      $('#dlgMeta').close(); toast('Meta creada'); await cargarMetas();
+    } catch (err) { $('#mtError').textContent = err.message; $('#mtError').hidden = false; } finally { btn.disabled = false; }
+  });
+
+  function abrirAporte(m, modo) {
+    const retiro = modo === 'retiro';
+    $('#dlgAporteTitulo').textContent = (retiro ? 'Retirar de ' : 'Aportar a ') + m.nombre;
+    $('#apSub').textContent = `Llevas ${pesos(m.ahorrado)} de ${pesos(m.objetivo)}.` + (retiro ? ' Puedes retirar hasta lo que llevas ahorrado.' : '');
+    $('#apValorLabel').textContent = retiro ? 'Cuánto retiras (COP)' : 'Cuánto aportas (COP)';
+    $('#apGuardar').textContent = retiro ? 'Retirar' : 'Aportar';
+    $('#apValor').value = ''; $('#apFecha').value = hoy(); $('#apFecha').max = hoy(); $('#apError').hidden = true;
+    $('#formAporte').dataset.id = m.id; $('#formAporte').dataset.modo = modo;
+    $('#dlgAporte').showModal(); $('#apValor').focus();
+  }
+  $('#formAporte').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const { id, modo } = e.target.dataset, btn = $('#apGuardar'); btn.disabled = true; $('#apError').hidden = true;
+    const meta = estado.metas.find((x) => String(x.id) === id), valor = leerNumero($('#apValor').value);
+    try {
+      if (!Number.isFinite(valor) || valor <= 0) throw new Error('Escribe un valor mayor que cero, por ejemplo 100.000.');
+      if (modo === 'retiro' && meta && valor > meta.ahorrado) throw new Error(`Solo puedes retirar hasta ${pesos(meta.ahorrado)}, que es lo que llevas ahorrado.`);
+      const r = await api('/api/finanzas/metas/' + encodeURIComponent(id) + '/aportes', { method: 'POST', body: { valor: modo === 'retiro' ? -valor : valor, fecha: $('#apFecha').value || hoy() } });
+      $('#dlgAporte').close(); toast(`${modo === 'retiro' ? 'Retiro' : 'Aporte'} registrado. Llevas ${pesos(r.ahorrado)}.`); await cargarMetas();
+    } catch (err) { $('#apError').textContent = err.message; $('#apError').hidden = false; } finally { btn.disabled = false; }
+  });
+
+  $('#listaMetas').addEventListener('click', (e) => {
+    const ap = e.target.closest('[data-aportar]'), re = e.target.closest('[data-retirar]'), bo = e.target.closest('[data-borrar-meta]');
+    const buscar = (id) => estado.metas.find((x) => String(x.id) === id);
+    if (ap && buscar(ap.dataset.aportar)) abrirAporte(buscar(ap.dataset.aportar), 'aporte');
+    if (re && buscar(re.dataset.retirar)) abrirAporte(buscar(re.dataset.retirar), 'retiro');
+    if (bo) {
+      confirmar({ titulo: `Borrar la meta "${bo.dataset.nombre}"`, texto: 'La meta y sus aportes saldrán de tus registros. No se mueve dinero de tu banco.', boton: 'Borrar meta' }, async () => {
+        await api('/api/finanzas/metas/' + encodeURIComponent(bo.dataset.borrarMeta), { method: 'DELETE' });
+        toast('Meta borrada'); await cargarMetas();
       });
     }
   });

@@ -363,6 +363,41 @@
     </form>
   </dialog>
 
+    <dialog id="dlgMeta" aria-labelledby="dlgMetaTitulo">
+    <form class="dlg" id="formMeta" method="dialog">
+      <h2 id="dlgMetaTitulo">Crear una meta de ahorro</h2>
+      <p class="sub">Ponle nombre a lo que quieres lograr. Es un apartado para organizarte: no mueve dinero de tu banco.</p>
+      <div class="grid-form">
+        <div class="campo ancho"><label for="mtNombre">Nombre</label><input id="mtNombre" maxlength="60" placeholder="Ej. Viaje a Cartagena, portátil, matrícula" required></div>
+        <div class="campo"><label for="mtObjetivo">Cuánto quieres ahorrar (COP)</label><input id="mtObjetivo" inputmode="numeric" placeholder="Ej. 3.000.000" required></div>
+        <div class="campo"><label for="mtFecha">Para cuándo (opcional)</label><input type="date" id="mtFecha" aria-describedby="mtAyuda"></div>
+      </div>
+      <p class="sub" id="mtAyuda" style="margin:10px 0 0">Si pones una fecha, te diremos cuánto ahorrar cada mes para llegar a tiempo.</p>
+      <p class="error-form" id="mtError" role="alert" hidden></p>
+      <div class="pie">
+        <button type="button" class="btn" data-cerrar>Cancelar</button>
+        <button type="submit" class="btn primario" id="mtGuardar">Crear meta</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="dlgAporte" aria-labelledby="dlgAporteTitulo">
+    <form class="dlg" id="formAporte" method="dialog">
+      <h2 id="dlgAporteTitulo"></h2>
+      <p class="sub" id="apSub"></p>
+      <div class="grid-form">
+        <div class="campo"><label for="apValor" id="apValorLabel">Cuánto aportas (COP)</label><input id="apValor" inputmode="numeric" placeholder="Ej. 100.000" required></div>
+        <div class="campo"><label for="apFecha">Fecha</label><input type="date" id="apFecha" required></div>
+      </div>
+      <p class="nota-segura"><i class="fas fa-circle-info" aria-hidden="true"></i><span>Esto es un registro para organizarte: no mueve dinero de tu banco.</span></p>
+      <p class="error-form" id="apError" role="alert" hidden></p>
+      <div class="pie">
+        <button type="button" class="btn" data-cerrar>Cancelar</button>
+        <button type="submit" class="btn primario" id="apGuardar">Aportar</button>
+      </div>
+    </form>
+  </dialog>
+
   <dialog id="dlgPago" aria-labelledby="dlgPagoTitulo">
     <form class="dlg" id="formPago" method="dialog">
       <h2 id="dlgPagoTitulo"></h2>
