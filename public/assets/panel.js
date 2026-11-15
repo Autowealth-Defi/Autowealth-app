@@ -35,6 +35,7 @@
   }
 
   async function api(ruta, opciones = {}) {
+    if (MODO_EJEMPLO) return apiEjemplo(ruta, opciones); // TEMPORAL-EJEMPLO (Paso 10): se borra en A1
     const init = { method: opciones.method || 'GET', credentials: 'same-origin', headers: {} };
     if (opciones.body !== undefined) { init.headers['Content-Type'] = 'application/json'; init.body = JSON.stringify(opciones.body); }
     let res;
@@ -321,7 +322,7 @@
   // Misma regla que GET /api/finanzas/resumen (api.md §2): durante los primeros 9 días del mes se usa el mes anterior
   const mesPorDefecto = () => (Number(hoy().slice(8, 10)) <= 9 ? sumarMeses(hoy().slice(0, 7), -1) : hoy().slice(0, 7));
 
-  // TEMPORAL (se borra en el Bloque A1): respuestas de ejemplo con la MISMA forma que api.md
+  // TEMPORAL-EJEMPLO (se borra en el Bloque A1): respuestas de ejemplo con la MISMA forma que api.md
   function datosEjemplo() {
     const mes = mesPorDefecto(), mesHoy = hoy().slice(0, 7);
     const dia = (d) => `${mes}-${String(d).padStart(2, '0')}`;
@@ -390,6 +391,63 @@
       '/api/finanzas/metas': { ok: true, metas },
     };
   }
+    // TEMPORAL-EJEMPLO ↓ (Paso 10) — Simulador de la API en memoria. Solo en localhost y con ?ejemplo en la URL.
+  const MODO_EJEMPLO = ['localhost', '127.0.0.1'].includes(location.hostname) && new URLSearchParams(location.search).has('ejemplo');
+  let bdEjemplo = null;
+  async function apiEjemplo(ruta, { method = 'GET', body } = {}) {
+    await new Promise((r) => setTimeout(r, 250));
+    const variante = new URLSearchParams(location.search).get('ejemplo');
+    if (variante === 'error') throw new Error('Error simulado del servidor (modo de ejemplo).');
+    if (!bdEjemplo) {
+      bdEjemplo = datosEjemplo();
+      if (variante === 'vacio') { bdEjemplo['/api/finanzas/presupuestos'].presupuestos = []; bdEjemplo['/api/finanzas/metas'].metas = []; }
+    }
+    const camino = ruta.split('?')[0], copia = (x) => JSON.parse(JSON.stringify(x)), falla = (msg) => { throw new Error(msg); };
+    const movs = bdEjemplo['/api/finanzas/movimientos'].movimientos, cats = bdEjemplo['/api/finanzas/movimientos'].categorias;
+    const P = bdEjemplo['/api/finanzas/presupuestos'].presupuestos, M = bdEjemplo['/api/finanzas/metas'].metas;
+    const nuevoId = (lista) => Math.max(0, ...lista.map((x) => x.id)) + 1;
+    const positivo = (v, msg) => { if (!Number.isFinite(v) || v <= 0) falla(msg); return v; };
+    const gastadoDe = (cat) => movs.filter((m) => m.monto < 0 && m.categoria === cat).reduce((a, m) => a - m.monto, 0);
+    const calcP = (p) => Object.assign(p, { gastado: gastadoDe(p.categoria), porcentaje: Math.round(gastadoDe(p.categoria) / p.limite * 100), estado: gastadoDe(p.categoria) > p.limite ? 'excedido' : gastadoDe(p.categoria) >= p.limite * 0.8 ? 'cerca' : 'bien' });
+    const calcM = (m) => Object.assign(m, { porcentaje: Math.round(m.ahorrado / m.objetivo * 100), aporteMensualSugerido: m.fechaLimite ? Math.ceil(Math.max(0, m.objetivo - m.ahorrado) / Math.max(1, mesesEntre(hoy().slice(0, 7), m.fechaLimite.slice(0, 7)))) : null });
+    let id;
+
+    if (method === 'GET' && bdEjemplo[camino]) return copia(bdEjemplo[camino]);
+    if (method === 'PATCH' && (id = camino.match(/^\/api\/finanzas\/movimientos\/(\d+)$/))) {
+      const m = movs.find((x) => x.id === Number(id[1])) || falla('No encontramos ese movimiento.');
+      m.categoria = body.categoria; P.forEach(calcP); return { ok: true };
+    }
+    if (method === 'POST' && camino === '/api/finanzas/presupuestos') {
+      if (!cats.gastos.includes(body.categoria)) falla('Elige una categoría de gasto.');
+      if (P.some((p) => p.categoria === body.categoria)) falla('Ya tienes un presupuesto para esa categoría.');
+      const p = calcP({ id: nuevoId(P), categoria: body.categoria, limite: positivo(body.limite, 'El límite debe ser mayor que cero.') });
+      P.push(p); return { ok: true, id: p.id };
+    }
+    if ((id = camino.match(/^\/api\/finanzas\/presupuestos\/(\d+)$/))) {
+      const i = P.findIndex((x) => x.id === Number(id[1])); if (i < 0) falla('No encontramos ese presupuesto.');
+      if (method === 'PATCH') { P[i].limite = positivo(body.limite, 'El límite debe ser mayor que cero.'); calcP(P[i]); return { ok: true }; }
+      if (method === 'DELETE') { P.splice(i, 1); return { ok: true }; }
+    }
+    if (method === 'POST' && camino === '/api/finanzas/metas') {
+      const nombre = String(body.nombre || '').trim();
+      if (!nombre || nombre.length > 60) falla('El nombre debe tener entre 1 y 60 caracteres.');
+      if (body.fechaLimite && body.fechaLimite < hoy()) falla('La fecha límite no puede estar en el pasado.');
+      const m = calcM({ id: nuevoId(M), nombre, objetivo: positivo(body.objetivo, 'El objetivo debe ser mayor que cero.'), ahorrado: 0, fechaLimite: body.fechaLimite || null });
+      M.push(m); return { ok: true, id: m.id };
+    }
+    if (method === 'POST' && (id = camino.match(/^\/api\/finanzas\/metas\/(\d+)\/aportes$/))) {
+      const m = M.find((x) => x.id === Number(id[1])) || falla('No encontramos esa meta.');
+      if (!Number.isFinite(body.valor) || body.valor === 0) falla('El valor no puede ser cero.');
+      if (m.ahorrado + body.valor < 0) falla(`Solo puedes retirar hasta ${pesos(m.ahorrado)}.`);
+      m.ahorrado += body.valor; calcM(m); return { ok: true, ahorrado: m.ahorrado };
+    }
+    if (method === 'DELETE' && (id = camino.match(/^\/api\/finanzas\/metas\/(\d+)$/))) {
+      const i = M.findIndex((x) => x.id === Number(id[1])); if (i < 0) falla('No encontramos esa meta.');
+      M.splice(i, 1); return { ok: true };
+    }
+    falla('Esta sección no tiene datos de ejemplo todavía.');
+  }
+  // TEMPORAL-EJEMPLO ↑
 
   // Paso 4: estructura vacía. El dibujo real llega en los pasos 6 a 8 y las llamadas a api() en el Bloque A.
     // ----- Presupuestos -----
@@ -403,6 +461,7 @@
   async function cargarMetas() {
     const mes = estado.mes || mesPorDefecto();
     $('#metasMes').textContent = 'Presupuestos de ' + nombreMes(mes);
+    $('#metasEjemplo').hidden = !MODO_EJEMPLO; // TEMPORAL-EJEMPLO
     const [p, m] = await Promise.all([api('/api/finanzas/presupuestos?mes=' + encodeURIComponent(mes)), api('/api/finanzas/metas')]);
     estado.presupuestos = p.presupuestos; estado.metas = m.metas;
     dibujarPresupuestos(p.presupuestos, mes);
@@ -1040,5 +1099,6 @@
     error: ['bad', 'No pudimos confirmar el pago con tu banco. Revisa el historial antes de intentarlo de nuevo.'],
   };
   if (MENSAJES_PAGO[pago]) { aviso(...MENSAJES_PAGO[pago]); history.replaceState(null, '', location.pathname + location.hash); }
+  if (MODO_EJEMPLO) aviso('info', '<b>Modo de ejemplo.</b> Los datos son ficticios y los cambios se pierden al recargar la página.'); // TEMPORAL-EJEMPLO
   abrirPestana((location.hash || '#resumen').slice(1));
 })();
