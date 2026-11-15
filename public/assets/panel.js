@@ -46,10 +46,9 @@
   }
 
   // ================= Estado =================
-  const estado = { resumen: null, mes: null, movimientos: [], categorias: null, cuentas: [], conexiones: [], tipos: [], bancos: null, consentimiento: null, filtroCategoria: '' };
-
+  const estado = { resumen: null, mes: null, movimientos: [], categorias: null, cuentas: [], conexiones: [], tipos: [], bancos: null, consentimiento: null, filtroCategoria: '', presupuestos: [], metas: [] };
   // ================= Pestañas =================
-  const PESTANAS = ['resumen', 'movimientos', 'plan', 'cuentas', 'privacidad'];
+  const PESTANAS = ['resumen', 'movimientos', 'metas', 'plan', 'cuentas', 'privacidad'];
   function abrirPestana(nombre, { foco = false } = {}) {
     if (!PESTANAS.includes(nombre)) nombre = 'resumen';
     for (const p of PESTANAS) {
@@ -75,6 +74,7 @@
     const fallo = (e) => aviso('bad', esc(e.message));
     if (nombre === 'resumen') cargarResumen().catch(fallo);
     if (nombre === 'movimientos') cargarMovimientos().catch(fallo);
+    if (nombre === 'metas') cargarMetas().catch(fallo); // <--- ESTA FALTA
     if (nombre === 'plan') cargarPlan().catch(fallo);
     if (nombre === 'cuentas') cargarCuentas().catch(fallo);
     if (nombre === 'privacidad') cargarPrivacidad().catch(fallo);
@@ -312,7 +312,14 @@
     else if (/^-?\d{1,3}(\.\d{3})+$/.test(s)) s = s.replace(/\./g, '');
     return Number(s);
   }
-
+    // ================= Metas y presupuestos =================
+  async function cargarMetas() {
+    const mes = estado.mes || hoy().slice(0, 7);
+    $('#metasMes').textContent = 'Presupuestos de ' + nombreMes(mes);
+    $('#listaPresupuestos').innerHTML = '<p class="vacio" style="text-align:left;padding:12px 0">Aún no tienes presupuestos. Crea uno para ponerle un tope a una categoría.</p>';
+    $('#listaMetas').innerHTML = '';
+    $('#metasVacio').hidden = false;
+  }
   // ================= Deudas y plan =================
   // El plan lo calcula el servidor (GET /api/finanzas/plan). Aquí solo se muestra y se piden los pagos.
   // Todo pago se confirma en el banco: esta página nunca mueve dinero por sí sola.

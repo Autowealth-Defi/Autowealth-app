@@ -23,6 +23,7 @@
   <nav class="pestanas" role="tablist" aria-label="Secciones del panel">
     <button role="tab" id="t-resumen" aria-controls="p-resumen" aria-selected="true" data-tab="resumen">Resumen</button>
     <button role="tab" id="t-movimientos" aria-controls="p-movimientos" aria-selected="false" data-tab="movimientos">Movimientos</button>
+    <button type="button" role="tab" id="t-metas" aria-controls="p-metas" aria-selected="false" data-tab="metas">Metas y presupuestos</button>
     <button role="tab" id="t-plan" aria-controls="p-plan" aria-selected="false" data-tab="plan">Deudas y plan</button>
     <button role="tab" id="t-cuentas" aria-controls="p-cuentas" aria-selected="false" data-tab="cuentas">Cuentas y bancos</button>
     <button role="tab" id="t-privacidad" aria-controls="p-privacidad" aria-selected="false" data-tab="privacidad">Privacidad</button>
@@ -141,6 +142,32 @@
           <p class="sub">Lo que has movido desde Auto-Wealth. En este prototipo todo es simulado con el banco de prueba.</p>
           <div class="datos-linea" id="totalesRedir" style="border-top:0;padding-top:0;margin-bottom:8px"></div>
           <ul class="lista" id="historialRedir"></ul>
+        </div>
+      </div>
+    </section>
+
+        <!-- ======================= METAS Y PRESUPUESTOS ======================= -->
+    <section role="tabpanel" id="p-metas" aria-labelledby="t-metas" hidden>
+      <div class="pila">
+        <div class="bloque">
+          <div class="cabecera-mes"><span class="mes-etiqueta" id="metasMes"></span><span class="chip" id="metasEjemplo" hidden>Datos de ejemplo</span></div>
+          <div class="titulo-accion">
+            <div><h2 id="tituloPresupuestos">Presupuestos del mes</h2><p class="sub" style="margin-bottom:0">Ponle un tope a lo que gastas en cada categoría. Te avisamos cuando llegues al 80 %.</p></div>
+            <button type="button" class="btn primario" id="btnNuevoPresupuesto"><i class="fas fa-plus" aria-hidden="true"></i> Crear presupuesto</button>
+          </div>
+          <div id="listaPresupuestos" role="list" aria-labelledby="tituloPresupuestos" style="margin-top:8px"></div>
+        </div>
+
+        <div class="bloque">
+          <div class="titulo-accion">
+            <div><h2 id="tituloMetas">Metas de ahorro</h2><p class="sub" style="margin-bottom:0">Lo que registras aquí es un apartado para organizarte: no mueve dinero de tu banco.</p></div>
+            <button type="button" class="btn primario" id="btnNuevaMeta"><i class="fas fa-plus" aria-hidden="true"></i> Crear meta</button>
+          </div>
+          <ul class="consejos metas" id="listaMetas" aria-labelledby="tituloMetas" style="margin-top:14px"></ul>
+          <div class="vacio" id="metasVacio" hidden>
+            <p style="margin:0 0 14px">Aún no tienes metas. Ponle nombre a algo por lo que estés ahorrando y mira cómo avanzas.</p>
+            <button type="button" class="btn primario" id="btnPrimeraMeta"><i class="fas fa-bullseye" aria-hidden="true"></i> Crear mi primera meta</button>
+          </div>
         </div>
       </div>
     </section>
