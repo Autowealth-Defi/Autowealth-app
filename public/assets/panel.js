@@ -436,9 +436,49 @@
     }).join('');
   }
   // Ver gastos → Movimientos filtrado (mismo patrón que dibujarCategorias). Editar y borrar se agregan en el paso 7.
+    // ----- Crear / editar un presupuesto (mismo patrón que abrirDeuda) -----
+  async function abrirPresupuesto(p) {
+    if (!estado.categorias) { const d = await api('/api/finanzas/movimientos?mes=' + hoy().slice(0, 7)); estado.categorias = d.categorias; }
+    const usadas = new Set(estado.presupuestos.map((x) => x.categoria));
+    const libres = p ? [p.categoria] : estado.categorias.gastos.filter((c) => !usadas.has(c));
+    if (!libres.length) { aviso('info', 'Ya tienes un presupuesto en cada categoría de gasto. Puedes editar el límite de cualquiera de ellos.'); return; }
+    $('#prCategoria').innerHTML = libres.map((c) => `<option>${esc(c)}</option>`).join('');
+    $('#prCategoria').disabled = !!p;
+    $('#dlgPresTitulo').textContent = p ? 'Editar el presupuesto de ' + p.categoria : 'Crear un presupuesto';
+    $('#prSub').textContent = p ? 'La categoría no se puede cambiar. Si quieres otra, borra este presupuesto y crea uno nuevo.' : 'Elige una categoría de gasto y cuánto quieres gastar como máximo en el mes.';
+    $('#prLimite').value = p ? Math.round(p.limite).toLocaleString('es-CO') : '';
+    $('#prGuardar').textContent = p ? 'Guardar cambios' : 'Crear presupuesto';
+    $('#formPresupuesto').dataset.id = p ? p.id : '';
+    $('#prError').hidden = true;
+    $('#dlgPresupuesto').showModal(); (p ? $('#prLimite') : $('#prCategoria')).focus();
+  }
+  $('#btnNuevoPresupuesto').addEventListener('click', () => abrirPresupuesto(null).catch((err) => aviso('bad', esc(err.message))));
+  $('#formPresupuesto').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const id = e.target.dataset.id, btn = $('#prGuardar'); btn.disabled = true; $('#prError').hidden = true;
+    const limite = leerNumero($('#prLimite').value);
+    try {
+      if (!Number.isFinite(limite) || limite <= 0) throw new Error('Escribe un límite mayor que cero, por ejemplo 400.000.');
+      if (id) await api('/api/finanzas/presupuestos/' + encodeURIComponent(id), { method: 'PATCH', body: { limite } });
+      else await api('/api/finanzas/presupuestos', { method: 'POST', body: { categoria: $('#prCategoria').value, limite } });
+      $('#dlgPresupuesto').close(); toast(id ? 'Presupuesto actualizado' : 'Presupuesto creado'); await cargarMetas();
+    } catch (err) { $('#prError').textContent = err.message; $('#prError').hidden = false; } finally { btn.disabled = false; }
+  });
+
+  // ----- Ver gastos, editar y borrar (delegación en la lista, como #listaDeudas) -----
   $('#listaPresupuestos').addEventListener('click', (e) => {
-    const ver = e.target.closest('[data-ver-cat]');
+    const ver = e.target.closest('[data-ver-cat]'), ed = e.target.closest('[data-editar-presupuesto]'), bo = e.target.closest('[data-borrar-presupuesto]');
     if (ver) { estado.filtroCategoria = ver.dataset.verCat; abrirPestana('movimientos'); }
+    if (ed) {
+      const p = estado.presupuestos.find((x) => String(x.id) === ed.dataset.editarPresupuesto);
+      if (p) abrirPresupuesto(p).catch((err) => aviso('bad', esc(err.message)));
+    }
+    if (bo) {
+      confirmar({ titulo: `Borrar el presupuesto de ${bo.dataset.nombre}`, texto: 'Dejarás de ver el tope y los avisos de esta categoría. Tus movimientos no se borran.', boton: 'Borrar presupuesto' }, async () => {
+        await api('/api/finanzas/presupuestos/' + encodeURIComponent(bo.dataset.borrarPresupuesto), { method: 'DELETE' });
+        toast('Presupuesto borrado'); await cargarMetas();
+      });
+    }
   });
   
   // ================= Deudas y plan =================

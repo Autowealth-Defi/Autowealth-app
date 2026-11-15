@@ -346,6 +346,23 @@
     </form>
   </dialog>
 
+    <dialog id="dlgPresupuesto" aria-labelledby="dlgPresTitulo">
+    <form class="dlg" id="formPresupuesto" method="dialog">
+      <h2 id="dlgPresTitulo">Crear un presupuesto</h2>
+      <p class="sub" id="prSub">Elige una categoría de gasto y cuánto quieres gastar como máximo en el mes.</p>
+      <div class="grid-form">
+        <div class="campo"><label for="prCategoria">Categoría</label><select id="prCategoria" required></select></div>
+        <div class="campo"><label for="prLimite">Límite mensual (COP)</label><input id="prLimite" inputmode="numeric" placeholder="Ej. 400.000" required aria-describedby="prAyuda"></div>
+      </div>
+      <p class="sub" id="prAyuda" style="margin:10px 0 0">Te avisaremos cuando llegues al 80 % del límite y cuando lo pases.</p>
+      <p class="error-form" id="prError" role="alert" hidden></p>
+      <div class="pie">
+        <button type="button" class="btn" data-cerrar>Cancelar</button>
+        <button type="submit" class="btn primario" id="prGuardar">Crear presupuesto</button>
+      </div>
+    </form>
+  </dialog>
+
   <dialog id="dlgPago" aria-labelledby="dlgPagoTitulo">
     <form class="dlg" id="formPago" method="dialog">
       <h2 id="dlgPagoTitulo"></h2>
