@@ -39,10 +39,10 @@
     const init = { method: opciones.method || 'GET', credentials: 'same-origin', headers: {} };
     if (opciones.body !== undefined) { init.headers['Content-Type'] = 'application/json'; init.body = JSON.stringify(opciones.body); }
     let res;
-    try { res = await fetch(ruta, init); } catch (e) { throw new Error('No hay conexión con el servidor. Revisa tu internet.'); }
+        try { res = await fetch(ruta, init); } catch (e) { throw Object.assign(new Error('No hay conexión con el servidor. Revisa tu internet.'), { status: 0 }); }
     const datos = await res.json().catch(() => ({ ok: false, error: 'Respuesta inesperada del servidor.' }));
     if (res.status === 401 && datos.sesion === false) { location.href = '/?entrar=1'; throw new Error('Sesión vencida'); }
-    if (!datos.ok) throw new Error(datos.error || 'Algo salió mal.');
+    if (!datos.ok) throw Object.assign(new Error(datos.error || 'Algo salió mal.'), { status: res.status });
     return datos;
   }
 
@@ -75,7 +75,7 @@
     const fallo = (e) => aviso('bad', esc(e.message));
     if (nombre === 'resumen') cargarResumen().catch(fallo);
     if (nombre === 'movimientos') cargarMovimientos().catch(fallo);
-    if (nombre === 'metas') cargarMetas().catch(fallo); // <--- ESTA FALTA
+    if (nombre === 'metas') cargarMetas().catch((e) => aviso('bad', esc(e.status === 404 || e.status === 405 ? 'La sección de metas y presupuestos todavía no está disponible.' : mensajeError(e))));
     if (nombre === 'plan') cargarPlan().catch(fallo);
     if (nombre === 'cuentas') cargarCuentas().catch(fallo);
     if (nombre === 'privacidad') cargarPrivacidad().catch(fallo);
@@ -493,6 +493,27 @@
       </div>`;
     }).join('');
   }
+  const MONTO_MAXIMO = 999999999;
+  const montoValido = (v) => Number.isFinite(v) && v > 0 && v <= MONTO_MAXIMO;
+  function mensajeError(err) {
+    const s = err && err.status;
+    if (s === 401) return 'Tu sesión terminó. Vuelve a entrar.';
+    if (s === 403) return 'No pudimos confirmar que la petición venga de esta página. Recárgala e intenta de nuevo.';
+    if (s === 404) return 'No encontramos ese elemento: quizá ya se borró. Actualizamos la lista.';
+    if (s === 405) return 'Esta función todavía no está disponible en el servidor.';
+    if (s === 429) return 'Hiciste muchos intentos seguidos. Espera un momento y vuelve a intentarlo.';
+    if (s >= 500) return 'Algo falló en el servidor. Intenta de nuevo en unos minutos.';
+    return err.message;
+  }
+  async function errorEnDialogo(err, dlg, caja, sobreExistente) {
+    if (err.status === 404 && sobreExistente) { dlg.close(); aviso('bad', esc(mensajeError(err))); await cargarMetas().catch(() => {}); return; }
+    caja.textContent = err.status === 404 ? 'Esta función todavía no está disponible en el servidor.' : mensajeError(err);
+    caja.hidden = false;
+  }
+  async function borrarSiExiste(ruta) {
+    try { await api(ruta, { method: 'DELETE' }); } catch (err) { if (err.status !== 404) throw new Error(mensajeError(err)); }
+  }
+
   // Lleva a Movimientos filtrado por categoría y en el mes del Resumen
   function verGastos(categoria) {
     estado.filtroCategoria = categoria;
@@ -522,7 +543,7 @@
     const id = e.target.dataset.id, btn = $('#prGuardar'); btn.disabled = true; $('#prError').hidden = true;
     const limite = leerNumero($('#prLimite').value);
     try {
-      if (!Number.isFinite(limite) || limite <= 0) throw new Error('Escribe un límite mayor que cero, por ejemplo 400.000.');
+      if (!montoValido(limite)) throw new Error('Escribe un límite entre $1 y $999.999.999, por ejemplo 400.000.');
       if (id) await api('/api/finanzas/presupuestos/' + encodeURIComponent(id), { method: 'PATCH', body: { limite } });
       else await api('/api/finanzas/presupuestos', { method: 'POST', body: { categoria: $('#prCategoria').value, limite } });
       $('#dlgPresupuesto').close(); toast(id ? 'Presupuesto actualizado' : 'Presupuesto creado'); await cargarMetas();
@@ -587,7 +608,7 @@
     const btn = $('#mtGuardar'); btn.disabled = true; $('#mtError').hidden = true;
     const objetivo = leerNumero($('#mtObjetivo').value);
     try {
-      if (!Number.isFinite(objetivo) || objetivo <= 0) throw new Error('Escribe cuánto quieres ahorrar, por ejemplo 3.000.000.');
+      if (!montoValido(objetivo)) throw new Error('Escribe un valor entre $1 y $999.999.999, por ejemplo 3.000.000.');
       await api('/api/finanzas/metas', { method: 'POST', body: { nombre: $('#mtNombre').value.trim(), objetivo, fechaLimite: $('#mtFecha').value || null } });
       $('#dlgMeta').close(); toast('Meta creada'); await cargarMetas();
     } catch (err) { $('#mtError').textContent = err.message; $('#mtError').hidden = false; } finally { btn.disabled = false; }
@@ -608,7 +629,7 @@
     const { id, modo } = e.target.dataset, btn = $('#apGuardar'); btn.disabled = true; $('#apError').hidden = true;
     const meta = estado.metas.find((x) => String(x.id) === id), valor = leerNumero($('#apValor').value);
     try {
-      if (!Number.isFinite(valor) || valor <= 0) throw new Error('Escribe un valor mayor que cero, por ejemplo 100.000.');
+      if (!montoValido(valor)) throw new Error('Escribe un valor entre $1 y $999.999.999, por ejemplo 100.000.');
       if (modo === 'retiro' && meta && valor > meta.ahorrado) throw new Error(`Solo puedes retirar hasta ${pesos(meta.ahorrado)}, que es lo que llevas ahorrado.`);
       const r = await api('/api/finanzas/metas/' + encodeURIComponent(id) + '/aportes', { method: 'POST', body: { valor: modo === 'retiro' ? -valor : valor, fecha: $('#apFecha').value || hoy() } });
       $('#dlgAporte').close(); toast(`${modo === 'retiro' ? 'Retiro' : 'Aporte'} registrado. Llevas ${pesos(r.ahorrado)}.`); await cargarMetas();
@@ -633,7 +654,7 @@
   async function avisarPresupuestos(mes) {
     const ul = $('#alertasPresupuesto'), pedido = ++pedidoAviso;
     let lista = [];
-    try { lista = (await api('/api/finanzas/presupuestos?mes=' + encodeURIComponent(mes))).presupuestos; } catch (e) { lista = []; }
+        try { lista = (await api('/api/finanzas/presupuestos?mes=' + encodeURIComponent(mes))).presupuestos; } catch (e) { lista = []; if (e.status !== 404) console.warn('[Auto-Wealth] Aviso de presupuestos:', e.status, e.message); }
     if (pedido !== pedidoAviso) return; 
     const riesgo = lista.filter((p) => p.estado === 'excedido' || p.estado === 'cerca').sort((a, b) => (Number(b.porcentaje) || 0) - (Number(a.porcentaje) || 0));
     ul.hidden = !riesgo.length;
