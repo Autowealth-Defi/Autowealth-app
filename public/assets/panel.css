@@ -216,6 +216,9 @@ fieldset.destinos legend { font-size: .85rem; font-weight: 600; color: var(--tex
 .deuda-fila .ico.ok { background: var(--ok-bg); color: var(--ok); } .deuda-fila .ico.warn { background: var(--warn-bg); color: var(--warn); } .deuda-fila .ico.bad { background: var(--bad-bg); color: var(--bad); }
 [role="list"] > .deuda-fila:last-child { border-bottom: 0; }
 
+.consejos li .btn { margin-left: auto; flex-shrink: 0; align-self: center; }
+@media (max-width: 560px) { .consejos li:has(.btn) { flex-wrap: wrap; } .consejos li:has(.btn) > span { flex: 1 1 calc(100% - 30px); } .consejos li .btn { margin-left: 30px; } }
+
 .metas li > div { flex: 1; min-width: 0; }
 .metas .detalle { display: block; color: var(--muted); font-size: .86rem; margin-top: 2px; }
 .metas .acciones { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 10px; }

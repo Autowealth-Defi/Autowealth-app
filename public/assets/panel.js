@@ -115,6 +115,7 @@
 
     dibujarMeses(r.serie, r.mes);
     dibujarCategorias(r.porCategoria, r.gastos);
+    avisarPresupuestos(r.mes);
 
     const iconos = { bien: 'fa-circle-check', atencion: 'fa-triangle-exclamation', alerta: 'fa-circle-exclamation', info: 'fa-lightbulb' };
     $('#consejos').innerHTML = r.recomendaciones.map((c) => `<li class="${c.tipo}"><i class="fas ${iconos[c.tipo] || 'fa-lightbulb'}" aria-hidden="true"></i><span>${esc(c.texto)}</span></li>`).join('');
@@ -433,6 +434,12 @@
       </div>`;
     }).join('');
   }
+  // Lleva a Movimientos filtrado por categoría y en el mes del Resumen
+  function verGastos(categoria) {
+    estado.filtroCategoria = categoria;
+    delete $('#fMes').dataset.listo;
+    abrirPestana('movimientos');
+  }
   // Ver gastos → Movimientos filtrado (mismo patrón que dibujarCategorias). Editar y borrar se agregan en el paso 7.
     // ----- Crear / editar un presupuesto (mismo patrón que abrirDeuda) -----
   async function abrirPresupuesto(p) {
@@ -466,7 +473,7 @@
   // ----- Ver gastos, editar y borrar (delegación en la lista, como #listaDeudas) -----
   $('#listaPresupuestos').addEventListener('click', (e) => {
     const ver = e.target.closest('[data-ver-cat]'), ed = e.target.closest('[data-editar-presupuesto]'), bo = e.target.closest('[data-borrar-presupuesto]');
-    if (ver) { estado.filtroCategoria = ver.dataset.verCat; abrirPestana('movimientos'); }
+    if (ver) verGastos(ver.dataset.verCat);
     if (ed) {
       const p = estado.presupuestos.find((x) => String(x.id) === ed.dataset.editarPresupuesto);
       if (p) abrirPresupuesto(p).catch((err) => aviso('bad', esc(err.message)));
@@ -560,6 +567,27 @@
         toast('Meta borrada'); await cargarMetas();
       });
     }
+  });
+
+    // ----- Aviso en el Resumen: presupuestos cerca del límite o excedidos -----
+  let pedidoAviso = 0;
+  async function avisarPresupuestos(mes) {
+    const ul = $('#alertasPresupuesto'), pedido = ++pedidoAviso;
+    let lista = [];
+    try { lista = (await api('/api/finanzas/presupuestos?mes=' + encodeURIComponent(mes))).presupuestos; } catch (e) { lista = []; }
+    if (pedido !== pedidoAviso) return; 
+    const riesgo = lista.filter((p) => p.estado === 'excedido' || p.estado === 'cerca').sort((a, b) => (Number(b.porcentaje) || 0) - (Number(a.porcentaje) || 0));
+    ul.hidden = !riesgo.length;
+    ul.innerHTML = riesgo.map((p) => {
+      const cat = esc(p.categoria), pct = Math.round(Number(p.porcentaje) || 0), excedido = p.estado === 'excedido';
+      return `<li class="${excedido ? 'alerta' : 'atencion'}"><i class="fas ${excedido ? 'fa-circle-exclamation' : 'fa-triangle-exclamation'}" aria-hidden="true"></i>
+        <span>${excedido ? `<b>Te pasaste en ${cat}:</b> llevas ${pesos(p.gastado)} de ${pesos(p.limite)} (${pct} %).` : `<b>Vas en el ${pct} % de ${cat}:</b> te quedan ${pesos(p.limite - p.gastado)} de ${pesos(p.limite)}.`}</span>
+        <button type="button" class="btn chico" data-ver-cat="${cat}" aria-label="Ver los gastos de ${cat}">Ver gastos</button></li>`;
+    }).join('');
+  }
+  $('#alertasPresupuesto').addEventListener('click', (e) => {
+    const b = e.target.closest('[data-ver-cat]');
+    if (b) verGastos(b.dataset.verCat);
   });
   
   // ================= Deudas y plan =================
