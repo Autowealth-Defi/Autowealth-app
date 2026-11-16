@@ -74,11 +74,12 @@ El servidor no envía correos directamente: le pide a un pequeño programa de Go
 1. Con la cuenta de Gmail **del proyecto** (no una personal), entra a [script.google.com](https://script.google.com) → **Nuevo proyecto** → nómbralo `Auto-Wealth correos`.
 2. Pega todo el archivo `apps-script/Envio-Gmail.gs`.
 3. Cambia `const SECRETO = 'CAMBIA-ESTO...'` por una clave inventada de 20 o más caracteres. Esa misma clave va en `GMAIL_SCRIPT_SECRET`.
-4. **Guardar** → elige la función `probar` → **▶ Ejecutar** → acepta los permisos (Configuración avanzada → Ir al proyecto).
-5. **Implementar → Nueva implementación** → ⚙️ **Aplicación web** → *Ejecutar como:* **Yo** · *Quién tiene acceso:* **Cualquier persona** → **Implementar**.
-6. Copia la URL que termina en `/exec`. Esa va en `GMAIL_SCRIPT_URL`.
+4. Cambia `const URL_APP = 'https://CAMBIA-ESTO.onrender.com'` por la URL de la app en Render, sin `/` al final. Debe ser **idéntica** a `APP_URL` en Render. El script rechaza los correos de recuperación cuyo enlace no empiece por `URL_APP/recuperar?token=`: así, aunque alguien robara el `SECRETO`, no podría mandar enlaces a otros sitios desde nuestro Gmail.
+5. **Guardar** → elige la función `probar` → **▶ Ejecutar** → acepta los permisos (Configuración avanzada → Ir al proyecto). Para ver el correo de recuperación, ejecuta también `probarRecuperacion`.
+6. **Implementar → Nueva implementación** → ⚙️ **Aplicación web** → *Ejecutar como:* **Yo** · *Quién tiene acceso:* **Cualquier persona** → **Implementar**.
+7. Copia la URL que termina en `/exec`. Esa va en `GMAIL_SCRIPT_URL`.
 
-Si cambias el script, publícalo con **Implementar → Administrar implementaciones → ✏️ → Versión: Nueva versión**. La URL no cambia.
+**Si cambias el script:** antes de pegar el código nuevo, copia aparte los valores reales de `SECRETO` y `URL_APP`, y vuelve a ponerlos después de pegar. El archivo del repositorio trae los valores de ejemplo, y si los dejas así, **dejan de salir todos los correos**. Luego publícalo con **Implementar → Administrar implementaciones → ✏️ → Versión: Nueva versión**. La URL no cambia.
 
 *Alternativa:* [Brevo](https://brevo.com) (300 correos al día, `EMAIL_PROVIDER=brevo`). Funciona bien con un dominio propio; con un remitente `@gmail.com` los correos suelen caer en spam.
 
@@ -130,6 +131,7 @@ Mientras el servicio viejo de Juanes esté solo **suspendido** (no borrado), se 
 |---|---|---|---|
 | `PORT` | No | `3000` | Puerto local (Render pone el suyo) |
 | `NODE_ENV` | En Render | `production` | Activa cookies seguras, HSTS y caché |
+| `APP_URL` | En Render | `https://autowealth.onrender.com` | Dirección pública de la app, sin `/` al final. Arma los enlaces de recuperar contraseña. Debe ser igual a `URL_APP` del Apps Script. Sin ella, el correo de recuperación no se envía |
 | `DATABASE_URL` | **Sí** | `postgresql://...neon.tech/neondb?sslmode=require` | Conexión a Neon |
 | `SESSION_SECRET` | **Sí** | 96 caracteres aleatorios | Firma las sesiones. Cambiarla cierra todas las sesiones |
 | `DATA_ENCRYPTION_KEY` | **Sí** | 64 caracteres hexadecimales | Cifra los datos financieros. ⚠️ **Si se pierde o se cambia, los datos cifrados no se pueden leer** |
