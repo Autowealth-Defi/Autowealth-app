@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="referrer" content="no-referrer">
+  <meta name="robots" content="noindex, nofollow">
+  <title>Crear contraseña nueva · Auto-Wealth</title>
+  <style>
+    :root { color-scheme: light dark; --bg:#f8f5fc; --card:#fff; --text:#1a1226; --muted:#625675; --accent:#7c5cbf; --border:#ded5eb; --error:#a11; }
+    @media (prefers-color-scheme: dark) { :root { --bg:#0f0a1a; --card:#1a1226; --text:#f0edf5; --muted:#c8bddb; --accent:#b8a0e0; --border:#40334f; --error:#ff9b9b; } }
+    * { box-sizing:border-box; }
+    body { margin:0; min-height:100vh; display:grid; place-items:center; padding:24px 16px; background:var(--bg); color:var(--text); font:16px/1.55 Inter,system-ui,-apple-system,"Segoe UI",sans-serif; }
+    main { width:min(100%,460px); padding:clamp(22px,6vw,36px); background:var(--card); border:1px solid var(--border); border-radius:18px; box-shadow:0 12px 36px #24123818; }
+    h1 { margin:0 0 8px; font-size:clamp(1.5rem,6vw,2rem); line-height:1.2; }
+    p { color:var(--muted); }
+    label { display:block; margin:18px 0 6px; font-weight:600; }
+    input, button { width:100%; min-height:46px; padding:10px 12px; border:1px solid var(--border); border-radius:9px; font:inherit; }
+    input { background:var(--card); color:var(--text); }
+    input:focus-visible, button:focus-visible, a:focus-visible { outline:3px solid var(--accent); outline-offset:3px; }
+    button { margin-top:22px; border:0; background:var(--accent); color:#fff; font-weight:700; cursor:pointer; }
+    button:disabled { opacity:.65; cursor:wait; }
+    #mensaje { min-height:1.5em; }
+    #mensaje.error { color:var(--error); }
+    .volver { display:inline-block; margin-top:8px; color:var(--accent); }
+  </style>
+  <script defer src="/assets/recuperar.js"></script>
+</head>
+<body>
+  <main>
+    <h1>Crear contraseña nueva</h1>
+    <p>Elige una contraseña de al menos 8 caracteres para volver a entrar a tu cuenta.</p>
+    <form id="formRecuperar" novalidate>
+      <label for="password">Contraseña nueva</label>
+      <input id="password" name="password" type="password" autocomplete="new-password" minlength="8" required>
+      <label for="confirmacion">Confirma la contraseña</label>
+      <input id="confirmacion" name="confirmacion" type="password" autocomplete="new-password" minlength="8" required>
+      <button id="enviar" type="submit">Guardar contraseña</button>
+    </form>
+    <p id="mensaje" role="status" aria-live="polite"></p>
+    <a class="volver" href="/">Volver al inicio</a>
+  </main>
+</body>
+</html>
