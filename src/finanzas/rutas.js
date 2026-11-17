@@ -11,6 +11,10 @@
 //   POST   /api/finanzas/cuentas                 → crear cuenta manual
 //   DELETE /api/finanzas/cuentas/:id             → borrar cuenta manual
 //   POST   /api/finanzas/importar                → importar extracto (filas ya leídas del CSV)
+//   GET    /api/finanzas/presupuestos?mes=YYYY-MM → presupuestos con lo gastado en el mes
+//   POST   /api/finanzas/presupuestos            → crear un presupuesto (una categoría de gasto)
+//   PATCH  /api/finanzas/presupuestos/:id        → cambiar el límite
+//   DELETE /api/finanzas/presupuestos/:id        → borrar un presupuesto
 //   GET    /api/privacidad                       → autorizaciones e historial
 //   GET    /api/privacidad/exportar              → descargar todos mis datos (JSON)
 //   POST   /api/privacidad/borrar-finanzas       → borrar toda mi información financiera
@@ -24,13 +28,14 @@ const auditoria = require('../auditoria');
 const openfinance = require('../openfinance');
 const { cifrar, descifrar } = require('../cifrado');
 const { TODAS, INGRESOS, GASTOS, NEUTRA, categorizar } = require('./categorias');
-const { resumen: calcularResumen, mesesAtras } = require('./analisis');
+const { resumen: calcularResumen, mesesAtras, estadoPresupuesto } = require('./analisis');
 const { deudaParaRespuesta } = require('./deudas');
 const { enviarJson, leerJson } = require('../http');
 const { exigirUsuario } = require('../sesion');
 const { verificarContrasena, crearLimitador, cookieCerrarSesion } = require('../seguridad');
 
 const TIPOS_CUENTA = ['ahorros', 'corriente', 'tarjeta_credito', 'billetera', 'efectivo', 'otra'];
+const TOPE_LIMITE = 10_000_000_000; // 10.000 millones: el mismo tope que usan cuentas y deudas
 const limiteContrasena = crearLimitador({ maximo: 5, ventanaMin: 15 });
 const limiteImportar = crearLimitador({ maximo: 20, ventanaMin: 15 });
 
@@ -237,6 +242,66 @@ async function importar(req, res) {
   enviarJson(res, 201, { ok: true, cuentaId, importados: nuevos, duplicados: validas.length - nuevos, invalidas });
 }
 
+// ----------------------------- PRESUPUESTOS -----------------------------
+// Un presupuesto es un límite mensual de gasto para UNA categoría de gasto.
+// Lo gastado no se guarda: se calcula con los movimientos del mes que se pide.
+
+// Revisa el límite que llega. Devuelve el número (en pesos enteros) o null si no sirve.
+function validarLimite(valor) {
+  if (valor === '' || valor === null || typeof valor === 'boolean') return null;
+  const limite = Math.round(Number(valor));
+  return Number.isFinite(limite) && limite > 0 && limite < TOPE_LIMITE ? limite : null;
+}
+const ERROR_LIMITE = 'Escribe un límite mayor que cero y menor que 10.000 millones.';
+
+async function listarPresupuestos(req, res, params, url) {
+  const usuario = await exigirUsuario(req, res);
+  if (!usuario) return;
+  // Sin ?mes= (o con uno mal escrito) se usa el mes en curso
+  const pedido = url.searchParams.get('mes');
+  const mes = esMes(pedido) ? pedido : mesActual();
+  const filas = await fdb.listarPresupuestos(usuario.id, mes + '-01', finDeMes(mes));
+  const presupuestos = filas.map((p) => ({ id: p.id, categoria: p.categoria, limite: p.limite, ...estadoPresupuesto(p.gastado, p.limite) }));
+  // categoriasDisponibles: las de gasto que todavía no tienen presupuesto (para el selector del panel)
+  const usadas = new Set(presupuestos.map((p) => p.categoria));
+  enviarJson(res, 200, { ok: true, mes, presupuestos, categoriasDisponibles: GASTOS.filter((c) => !usadas.has(c)) });
+}
+
+async function crearPresupuesto(req, res) {
+  const usuario = await exigirUsuario(req, res);
+  if (!usuario) return;
+  const b = await leerJson(req);
+  // Solo categorías de GASTO: no tiene sentido un "límite" para el salario
+  if (!GASTOS.includes(b.categoria)) return enviarJson(res, 400, { ok: false, error: 'Elige una categoría de gasto.' });
+  const limite = validarLimite(b.limite);
+  if (limite === null) return enviarJson(res, 400, { ok: false, error: ERROR_LIMITE });
+  const id = await fdb.crearPresupuesto(usuario.id, b.categoria, limite);
+  if (!id) return enviarJson(res, 409, { ok: false, error: `Ya tienes un presupuesto para "${b.categoria}". Cambia su límite en vez de crear otro.` });
+  await auditoria.registrar(usuario.id, 'presupuesto_creado', b.categoria);
+  enviarJson(res, 201, { ok: true, id });
+}
+
+async function actualizarPresupuesto(req, res, params) {
+  const usuario = await exigirUsuario(req, res);
+  if (!usuario) return;
+  const limite = validarLimite((await leerJson(req)).limite);
+  if (limite === null) return enviarJson(res, 400, { ok: false, error: ERROR_LIMITE });
+  // La consulta filtra por usuario_id: si el id es de otra persona, no cambia nada y responde 404
+  const ok = await fdb.actualizarPresupuesto(usuario.id, Number(params.id), limite);
+  if (!ok) return enviarJson(res, 404, { ok: false, error: 'Presupuesto no encontrado.' });
+  await auditoria.registrar(usuario.id, 'presupuesto_actualizado', `presupuesto ${params.id}`);
+  enviarJson(res, 200, { ok: true });
+}
+
+async function eliminarPresupuesto(req, res, params) {
+  const usuario = await exigirUsuario(req, res);
+  if (!usuario) return;
+  const ok = await fdb.eliminarPresupuesto(usuario.id, Number(params.id));
+  if (!ok) return enviarJson(res, 404, { ok: false, error: 'Presupuesto no encontrado.' });
+  await auditoria.registrar(usuario.id, 'presupuesto_eliminado', `presupuesto ${params.id}`);
+  enviarJson(res, 200, { ok: true });
+}
+
 // ------------------------------ PRIVACIDAD -----------------------------
 
 async function privacidad(req, res) {
@@ -263,6 +328,8 @@ async function exportar(req, res) {
     cuentas: await fdb.listarCuentas(usuario.id),
     movimientos: descifrarMovimientos(await fdb.listarMovimientos(usuario.id)),
     deudas: (await fdb.listarDeudas(usuario.id)).map(deudaParaRespuesta),
+    presupuestos: (await fdb.listarPresupuestos(usuario.id, mesActual() + '-01', finDeMes(mesActual())))
+      .map(({ id, categoria, limite }) => ({ id, categoria, limite })),
     pagos_e_inversiones: await fdb.listarRedirecciones(usuario.id),
     historial: await auditoria.listar(usuario.id, 1000),
   };
@@ -307,5 +374,6 @@ async function eliminarCuentaUsuario(req, res) {
 module.exports = {
   resumen, listarMovimientos, crearMovimiento, actualizarMovimiento, eliminarMovimiento,
   listarCuentas, crearCuenta, eliminarCuenta, importar,
+  listarPresupuestos, crearPresupuesto, actualizarPresupuesto, eliminarPresupuesto,
   privacidad, exportar, borrarFinanzas, eliminarCuentaUsuario,
 };

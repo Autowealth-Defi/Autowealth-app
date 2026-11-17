@@ -76,6 +76,10 @@ const API = [
   ['POST', '/api/finanzas/cuentas', finanzas.crearCuenta],
   ['DELETE', '/api/finanzas/cuentas/:id', finanzas.eliminarCuenta],
   ['POST', '/api/finanzas/importar', finanzas.importar],
+  ['GET', '/api/finanzas/presupuestos', finanzas.listarPresupuestos],
+  ['POST', '/api/finanzas/presupuestos', finanzas.crearPresupuesto],
+  ['PATCH', '/api/finanzas/presupuestos/:id', finanzas.actualizarPresupuesto],
+  ['DELETE', '/api/finanzas/presupuestos/:id', finanzas.eliminarPresupuesto],
 
   ['GET', '/api/finanzas/deudas', deudas.listarDeudas],
   ['POST', '/api/finanzas/deudas', deudas.crearDeuda],
