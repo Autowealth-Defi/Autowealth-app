@@ -29,7 +29,8 @@
 
 * { box-sizing: border-box; }
 html, body { margin: 0; }
-body { font-family: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, Arial, sans-serif; background: var(--bg); color: var(--text); line-height: 1.55; font-size: 16px; }
+/* Fondo transparente: el fondo animado lo pinta <html> desde movimiento.css. */
+body { font-family: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, Arial, sans-serif; background: transparent; color: var(--text); line-height: 1.55; font-size: 16px; }
 button, input, select { font: inherit; color: inherit; }
 a { color: var(--accent); }
 .num { font-variant-numeric: tabular-nums; white-space: nowrap; }
@@ -274,4 +275,219 @@ dialog::backdrop { background: rgba(15, 10, 26, 0.55); }
 .acepto input { margin-top: 4px; accent-color: var(--accent); width: 18px; height: 18px; flex-shrink: 0; }
 .nota-segura { font-size: .85rem; color: var(--muted); display: flex; gap: 8px; margin-top: 12px; }
 .error-form { color: var(--bad); font-size: .88rem; margin-top: 10px; }
-@media (prefers-reduced-motion: no-preference) { .declaracion { animation: entrar .5s ease both; } @keyframes entrar { from { opacity: 0; transform: translateY(6px); } } }
+
+/* =====================================================================
+   MOVIMIENTO Y BRILLO — mismo estilo de la presentación final.
+   El fondo animado y los keyframes mv-* están en movimiento.css.
+   La onda de los botones y la luz que sigue al mouse las pone
+   movimiento.js (no toca datos ni la API).
+   ===================================================================== */
+:root {
+  --vidrio: rgba(255, 255, 255, 0.72);
+  --vidrio-2: rgba(243, 238, 250, 0.78);
+  --foco: rgba(124, 92, 191, 0.12);
+  --borde-vivo: rgba(124, 92, 191, 0.40);
+  --rayas: rgba(255, 255, 255, 0.16);
+  --vidrio-fuerte: rgba(255, 255, 255, 0.93);
+  /* Morados oscuros: el texto blanco del botón principal se lee bien (contraste ≥ 4.5). */
+  --degradado: linear-gradient(110deg, #5a3d8a, #7c5cbf 35%, #6a4bb0 55%, #7c5cbf 75%, #5a3d8a);
+  --degradado-texto: linear-gradient(100deg, #5a3d8a, #9b7fd4 50%, #5a3d8a);
+}
+[data-theme="dark"] {
+  --vidrio: rgba(26, 18, 38, 0.66);
+  --vidrio-2: rgba(34, 24, 56, 0.70);
+  --foco: rgba(184, 160, 224, 0.14);
+  --borde-vivo: rgba(184, 160, 224, 0.45);
+  --rayas: rgba(255, 255, 255, 0.22);
+  --vidrio-fuerte: rgba(26, 18, 38, 0.90);
+  /* Morados claros: el texto oscuro del botón principal se lee bien. */
+  --degradado: linear-gradient(110deg, #9b7fd4, #b8a0e0 35%, #d0c0e8 55%, #b8a0e0 75%, #9b7fd4);
+  --degradado-texto: linear-gradient(100deg, #b8a0e0, #e3d6fb 50%, #b8a0e0);
+}
+
+/* ---------- Marca y barra superior ---------- */
+.marca {
+  background: var(--degradado-texto);
+  background-size: 200% auto;
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  animation: mv-fluir 6s linear infinite;
+}
+.icono-btn { background: var(--vidrio); backdrop-filter: blur(10px); transition: transform .5s var(--mv-resorte), border-color .3s, color .3s, box-shadow .3s; position: relative; overflow: hidden; isolation: isolate; }
+.icono-btn:hover { transform: rotate(180deg) scale(1.08); box-shadow: 0 6px 20px var(--mv-halo); }
+
+/* ---------- Pestañas: la línea de la activa crece desde el centro ---------- */
+.pestanas button { position: relative; border-bottom: 0; transition: color .3s; }
+.pestanas button::after {
+  content: '';
+  position: absolute;
+  left: 14px; right: 14px; bottom: 0;
+  height: 3px;
+  border-radius: 3px 3px 0 0;
+  background: var(--degradado);
+  background-size: 200% auto;
+  transform: scaleX(0);
+  transition: transform .45s var(--mv-resorte);
+}
+.pestanas button:hover { color: var(--text-2); }
+.pestanas button:hover::after { transform: scaleX(.35); }
+.pestanas button[aria-selected="true"]::after { transform: scaleX(1); animation: mv-fluir 4s linear infinite; }
+
+/* ---------- Tarjetas de vidrio con luz que sigue al mouse ----------
+   --mx y --my los actualiza movimiento.js con la posición del puntero. */
+.bloque,
+.camino {
+  background:
+    radial-gradient(420px circle at var(--mx, 50%) var(--my, -40%), var(--foco), transparent 65%),
+    var(--vidrio);
+  backdrop-filter: blur(16px) saturate(1.3);
+  -webkit-backdrop-filter: blur(16px) saturate(1.3);
+  transition: border-color .3s, box-shadow .5s var(--mv-ease), transform .5s var(--mv-resorte);
+}
+.bloque:hover { border-color: var(--borde-vivo); box-shadow: 0 24px 50px -24px var(--mv-halo); }
+.consejos li, .aviso-legal, .consent { background: var(--vidrio-2); }
+
+/* Entrada escalonada: corre cada vez que se abre una pestaña (al quitar [hidden]). */
+.bloque, .cabecera-mes, .declaracion, .remate, .datos-linea { animation: mv-entrar .7s var(--mv-ease) both; }
+.declaracion { animation-delay: .06s; }
+.remate { animation-delay: .12s; }
+.datos-linea { animation-delay: .18s; }
+.grid-2 > .bloque:nth-child(1) { animation-delay: .22s; }
+.grid-2 > .bloque:nth-child(2) { animation-delay: .32s; }
+.pila > :nth-child(2) { animation-delay: .1s; }
+.pila > :nth-child(3) { animation-delay: .2s; }
+.pila > :nth-child(4) { animation-delay: .3s; }
+
+/* ---------- La frase del resumen: la cifra brilla ---------- */
+.declaracion .cifra:not(.gasto) {
+  background: var(--degradado-texto);
+  background-size: 200% auto;
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  animation: mv-fluir 5s linear infinite;
+}
+.datos-linea div { transition: transform .4s var(--mv-resorte); }
+.datos-linea div:hover { transform: translateY(-3px); }
+
+/* ---------- Botones ---------- */
+.btn {
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
+  background: var(--vidrio);
+  transition: transform .4s var(--mv-resorte), box-shadow .4s var(--mv-ease), border-color .3s, background .3s, color .3s;
+}
+.btn:hover:not(:disabled) { transform: translateY(-2px); box-shadow: 0 10px 26px -10px var(--mv-halo); }
+.btn:active:not(:disabled) { transform: scale(.96); transition-duration: .12s; }
+.btn i { transition: transform .45s var(--mv-resorte); }
+.btn:hover:not(:disabled) i { transform: scale(1.18) rotate(-8deg); }
+/* Principal: degradado que fluye + reflejo de luz que lo cruza. */
+.btn.primario {
+  background: var(--degradado);
+  background-size: 200% auto;
+  border-color: transparent;
+  box-shadow: 0 8px 24px -8px var(--mv-halo);
+  animation: mv-fluir 5s linear infinite;
+}
+.btn.primario::after {
+  content: '';
+  position: absolute;
+  z-index: -1;
+  top: 0; bottom: 0; left: 0;
+  width: 40%;
+  background: linear-gradient(90deg, transparent, var(--mv-brillo), transparent);
+  animation: mv-reflejo 4.5s var(--mv-ease) infinite;
+  pointer-events: none;
+}
+.btn.primario:hover:not(:disabled) { filter: none; transform: translateY(-3px) scale(1.03); box-shadow: 0 16px 36px -10px var(--mv-halo); }
+.btn.primario:disabled::after { animation: none; opacity: 0; }
+.btn.peligro { background: transparent; }
+.btn.peligro:hover:not(:disabled) { background: var(--bad-bg); box-shadow: 0 10px 26px -12px var(--bad); }
+
+/* ---------- Caminos (pantalla vacía): borde de luz que gira ---------- */
+.camino { position: relative; overflow: hidden; isolation: isolate; }
+.camino::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 1.5px;
+  background: conic-gradient(from var(--mv-angulo), transparent 0 60%, var(--accent) 80%, transparent 100%);
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  opacity: 0;
+  transition: opacity .4s;
+  animation: mv-girar 3s linear infinite;
+  pointer-events: none;
+}
+.camino:hover { transform: translateY(-6px); box-shadow: 0 20px 40px -20px var(--mv-halo); border-color: transparent; }
+.camino:hover::before { opacity: 1; }
+.camino i {
+  display: inline-grid; place-items: center;
+  width: 44px; height: 44px; border-radius: 14px;
+  background: var(--degradado); background-size: 200% auto;
+  color: var(--card);
+  transition: transform .5s var(--mv-resorte);
+}
+.camino:hover i { transform: rotate(-10deg) scale(1.12); }
+
+/* ---------- Gráficas que crecen al aparecer ---------- */
+.barra-cat .relleno {
+  background: var(--degradado);
+  background-size: 200% auto;
+  transform-origin: left;
+  animation: mv-crecer 1s var(--mv-ease) both, mv-fluir 6s linear infinite;
+}
+.barra-cat:nth-child(2) .relleno { animation-delay: .08s, 0s; }
+.barra-cat:nth-child(3) .relleno { animation-delay: .16s, 0s; }
+.barra-cat:nth-child(4) .relleno { animation-delay: .24s, 0s; }
+.barra-cat:nth-child(5) .relleno { animation-delay: .32s, 0s; }
+.barra-cat:nth-child(6) .relleno { animation-delay: .40s, 0s; }
+.barra-cat:nth-child(n+7) .relleno { animation-delay: .48s, 0s; }
+.barra-cat { transition: transform .35s var(--mv-resorte); }
+.barra-cat:hover:not(:disabled) { transform: translateX(4px); }
+/* Barras del SVG de ingresos y gastos: suben desde la base con resorte. */
+.grafica .grupo path { transform-box: fill-box; transform-origin: 50% 100%; animation: mv-subir .9s var(--mv-resorte) both; transition: filter .25s; }
+.grafica .grupo:nth-of-type(2) path { animation-delay: .07s; }
+.grafica .grupo:nth-of-type(3) path { animation-delay: .14s; }
+.grafica .grupo:nth-of-type(4) path { animation-delay: .21s; }
+.grafica .grupo:nth-of-type(5) path { animation-delay: .28s; }
+.grafica .grupo:nth-of-type(6) path { animation-delay: .35s; }
+.grafica .grupo:hover path, .grafica .grupo:focus path { filter: brightness(1.15) drop-shadow(0 4px 10px var(--mv-halo)); }
+.tooltip { background: var(--vidrio); backdrop-filter: blur(12px); animation: mv-zoom .25s var(--mv-resorte) both; }
+
+/* ---------- Listas: entran en cascada y responden al mouse ---------- */
+.consejos li { animation: mv-entrar-izq .6s var(--mv-ease) both; transition: transform .35s var(--mv-resorte); }
+.consejos li:nth-child(2) { animation-delay: .08s; }
+.consejos li:nth-child(3) { animation-delay: .16s; }
+.consejos li:nth-child(n+4) { animation-delay: .24s; }
+.consejos li:hover { transform: translateX(6px); }
+.lista li, table.movs tbody tr, .cuenta-fila, .deuda-fila { transition: background .25s; }
+.lista li:hover, table.movs tbody tr:hover, .cuenta-fila:hover, .deuda-fila:hover { background: var(--foco); }
+.plan-pasos > li::before, .pasos > li::before { background: var(--degradado); background-size: 200% auto; color: var(--card); animation: mv-fluir 6s linear infinite; }
+/* Dinero ocioso: rayas que avanzan, como dinero que se mueve. */
+.barra-ocioso .libre {
+  background-image: linear-gradient(45deg, var(--rayas) 25%, transparent 25% 50%, var(--rayas) 50% 75%, transparent 75%);
+  background-size: 28px 28px;
+  background-color: var(--accent);
+  animation: mv-rayas 1.6s linear infinite;
+}
+@keyframes mv-rayas { to { background-position: 28px 0; } }
+
+/* ---------- Campos y opciones ---------- */
+.campo input, .campo select, select.control, input.control { background: var(--vidrio); transition: border-color .3s, box-shadow .3s; }
+.campo input:focus, .campo select:focus, select.control:focus, input.control:focus { border-color: var(--accent); box-shadow: 0 0 0 4px var(--foco); }
+.opcion-banco, .opcion-destino { transition: transform .35s var(--mv-resorte), border-color .3s, background .3s; }
+.opcion-banco:hover, .opcion-destino:hover { transform: translateY(-2px); border-color: var(--borde-vivo); }
+
+/* ---------- Diálogos y avisos con resorte ---------- */
+/* Más opaco que las tarjetas: el fondo oscuro del diálogo no debe agrisar el formulario. */
+dialog { background: var(--vidrio-fuerte); backdrop-filter: blur(22px) saturate(1.3); -webkit-backdrop-filter: blur(22px) saturate(1.3); border-color: var(--borde-vivo); }
+dialog[open] { animation: mv-zoom .5s var(--mv-resorte) both; }
+dialog[open]::backdrop { backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); animation: mv-aparecer .3s ease both; }
+.aviso > div { animation: mv-entrar .5s var(--mv-resorte) both; }
+.toast:not([hidden]) { animation: mv-toast .5s var(--mv-resorte) both; }
+@keyframes mv-toast { from { opacity: 0; transform: translate(-50%, 24px) scale(.9); } }
