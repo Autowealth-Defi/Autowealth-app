@@ -1,0 +1,151 @@
+/* =====================================================================
+   movimiento.css — Fondo animado y animaciones compartidas.
+   Lo usan la página de inicio (inicio.css lo importa) y el panel
+   (app.html lo enlaza antes de panel.css).
+
+   Es el mismo lenguaje visual de la presentación final: una "noche
+   violeta" con orbes de luz difusa que flotan despacio, un grano suave
+   encima y brillos que cruzan los botones.
+
+   Cómo funciona el fondo: no agrega elementos al HTML. Usa los
+   pseudo-elementos ::before y ::after de <html> y <body> (tres orbes y
+   el grano), fijos detrás de todo el contenido (z-index: -1). Por eso
+   cada página deja su <body> con fondo transparente.
+
+   Accesibilidad: si la persona activó "reducir movimiento" en su
+   sistema, al final de este archivo se apagan todas las animaciones.
+   ===================================================================== */
+
+/* ---------- Ángulo animable (para los bordes que giran) ----------
+   @property le dice al navegador que --mv-angulo es un ángulo, así puede
+   animarlo. Si un navegador no lo entiende, el borde queda quieto. */
+@property --mv-angulo {
+  syntax: '<angle>';
+  inherits: false;
+  initial-value: 0deg;
+}
+
+/* ---------- Colores del movimiento (claro y oscuro) ----------
+   Se usa :root[data-theme] y no solo [data-theme] porque en la página de
+   inicio los botones del selector de tema también tienen data-theme. */
+:root {
+  --mv-fondo: #f6f2fc;
+  --mv-fondo-alto: #ebe1fa;
+  --mv-orbe-1: rgba(155, 127, 212, 0.42);
+  --mv-orbe-2: rgba(184, 160, 224, 0.50);
+  --mv-orbe-3: rgba(124, 92, 191, 0.22);
+  --mv-grano: 0.05;
+  --mv-brillo: rgba(255, 255, 255, 0.55);
+  --mv-halo: rgba(124, 92, 191, 0.40);
+  --mv-ease: cubic-bezier(0.22, 1, 0.36, 1);
+  --mv-resorte: cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+:root[data-theme="dark"] {
+  --mv-fondo: #0f0a1a;
+  --mv-fondo-alto: #1b1236;
+  --mv-orbe-1: rgba(124, 92, 191, 0.60);
+  --mv-orbe-2: rgba(106, 75, 176, 0.55);
+  --mv-orbe-3: rgba(155, 127, 212, 0.32);
+  --mv-grano: 0.07;
+  --mv-brillo: rgba(255, 255, 255, 0.35);
+  --mv-halo: rgba(184, 160, 224, 0.45);
+}
+
+/* ---------- Fondo: degradado de noche + orbes + grano ---------- */
+html {
+  min-height: 100%;
+  background-color: var(--mv-fondo);
+  background-image: radial-gradient(120% 90% at 50% 0%, var(--mv-fondo-alto) 0%, var(--mv-fondo) 60%);
+  background-attachment: fixed;
+  transition: background-color 0.4s;
+}
+html::before,
+html::after,
+body::before {
+  content: '';
+  position: fixed;
+  z-index: -1;
+  border-radius: 50%;
+  pointer-events: none;
+  will-change: transform;
+}
+html::before {
+  width: 52vmax; height: 52vmax; left: -14vmax; top: -18vmax;
+  background: radial-gradient(circle, var(--mv-orbe-1) 0%, transparent 68%);
+  animation: mv-flota-a 22s ease-in-out infinite;
+}
+html::after {
+  width: 46vmax; height: 46vmax; right: -14vmax; bottom: -18vmax;
+  background: radial-gradient(circle, var(--mv-orbe-2) 0%, transparent 68%);
+  animation: mv-flota-b 26s ease-in-out infinite;
+}
+body::before {
+  width: 30vmax; height: 30vmax; left: 45vw; top: 30vh;
+  background: radial-gradient(circle, var(--mv-orbe-3) 0%, transparent 70%);
+  animation: mv-flota-c 30s ease-in-out infinite;
+}
+/* Grano: ruido fino en SVG (data:, permitido por la CSP) que le quita lo "plano" al degradado. */
+body::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  opacity: var(--mv-grano);
+  mix-blend-mode: overlay;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+
+/* ---------- Onda al tocar un botón (la crea movimiento.js) ---------- */
+.mv-onda {
+  position: absolute;
+  z-index: -1;
+  border-radius: 50%;
+  pointer-events: none;
+  background: var(--mv-brillo);
+  transform: scale(0);
+  animation: mv-onda 0.65s var(--mv-ease) forwards;
+}
+
+/* ---------- Animaciones que usan las dos páginas ---------- */
+@keyframes mv-flota-a { 50% { transform: translate(8vw, 10vh) scale(1.08); } }
+@keyframes mv-flota-b { 50% { transform: translate(-10vw, -8vh) scale(1.12); } }
+@keyframes mv-flota-c { 50% { transform: translate(-18vw, 14vh) scale(0.85); } }
+/* Desplaza un degradado de 200% de ancho: textos y botones que "fluyen". */
+@keyframes mv-fluir { to { background-position: 200% 50%; } }
+/* Reflejo de luz que cruza un botón de izquierda a derecha. */
+@keyframes mv-reflejo {
+  0%, 55% { transform: translateX(-130%) skewX(-20deg); }
+  100% { transform: translateX(330%) skewX(-20deg); }
+}
+/* Aro que late alrededor del botón principal. */
+@keyframes mv-latido {
+  0% { box-shadow: 0 10px 34px var(--mv-halo), 0 0 0 0 var(--mv-halo); }
+  70% { box-shadow: 0 10px 34px var(--mv-halo), 0 0 0 16px transparent; }
+  100% { box-shadow: 0 10px 34px var(--mv-halo), 0 0 0 0 transparent; }
+}
+@keyframes mv-entrar { from { opacity: 0; transform: translateY(26px); } }
+@keyframes mv-entrar-izq { from { opacity: 0; transform: translateX(-34px); } }
+@keyframes mv-entrar-der { from { opacity: 0; transform: translateX(34px); } }
+@keyframes mv-zoom { from { opacity: 0; transform: scale(0.88); } }
+@keyframes mv-aparecer { from { opacity: 0; } }
+@keyframes mv-flotar { 50% { transform: translateY(-14px); } }
+@keyframes mv-girar { to { --mv-angulo: 360deg; } }
+@keyframes mv-rotar { to { transform: rotate(360deg); } }
+@keyframes mv-onda { to { transform: scale(4); opacity: 0; } }
+@keyframes mv-crecer { from { transform: scaleX(0); } }
+@keyframes mv-subir { from { transform: scaleY(0); } }
+
+/* ---------- Reducir movimiento ----------
+   Duración casi cero (y no "none") para que las animaciones de entrada
+   terminen en su estado final: todo queda visible, solo que sin moverse. */
+@media (prefers-reduced-motion: reduce) {
+  html::before, html::after, body::before { animation: none; }
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    animation-delay: 0s !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
