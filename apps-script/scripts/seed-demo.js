@@ -9,15 +9,16 @@
 //  los vuelve a crear. Nunca toca datos de otros usuarios.
 // =====================================================================
 'use strict';
-
-const path = require('node:path');
 const { Pool } = require('pg');
+const path = require('node:path');
+const fs = require('node:fs');
 
 // Carga el .env desde la raíz del proyecto
-const envPath = path.join(__dirname, '..', '.env');
-require('node:fs').existsSync(envPath) && process.loadEnvFile(envPath);
+const envPath = path.join(__dirname, '..', '..', '.env');
+if (fs.existsSync(envPath)) process.loadEnvFile(envPath);
 
-const { cifrar } = require('../src/cifrado');
+// Ahora sí carga cifrado (que usa config.js, que ya encuentra las variables)
+const { cifrar } = require('../../src/cifrado');
 
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
@@ -63,7 +64,7 @@ async function main() {
       await client.query('DELETE FROM auditoria          WHERE usuario_id = $1', [usuarioId]);
     } else {
       // Contraseña fija para demo: "Demo1234!" (bcrypt generado de antemano)
-      const HASH = '$2b$10$rOTIaFBMmHATkB1yDpESx.tOi4FMF3H3tIFwkCMHPjr4hzJeWuq2K';
+      const HASH = 'scrypt$32768$8$1$NIqRMj8i4jzfZLgam0al0A==$Dj21ffzkJ1EHx9KWCJy4OQde7Sjifm7nwwCI/LMZjXH5vHWVQnXsmh9HtauLdJGZ9rVwukKVfgIrZITGhO1qVA==';
       const { rows: nuevo } = await client.query(
         `INSERT INTO usuarios
            (nombre, email, telefono, cedula, password_hash, acepta_datos, acepta_datos_en)
