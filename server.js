@@ -38,7 +38,7 @@ function leerPublico(relativo) {
   if (config.esProduccion) cache.set(relativo, contenido);
   return contenido;
 }
-const PAGINAS = { '/': 'index.html', '/index.html': 'index.html', '/privacidad': 'privacidad.html' };
+const PAGINAS = { '/': 'index.html', '/index.html': 'index.html', '/privacidad': 'privacidad.html', '/terminos': 'terminos.html' };
 const TIPOS = {
   '.css': 'text/css; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.svg': 'image/svg+xml',
   '.png': 'image/png', '.jpg': 'image/jpeg', '.webp': 'image/webp', '.ico': 'image/x-icon', '.woff2': 'font/woff2',
@@ -76,6 +76,10 @@ const API = [
   ['POST', '/api/finanzas/cuentas', finanzas.crearCuenta],
   ['DELETE', '/api/finanzas/cuentas/:id', finanzas.eliminarCuenta],
   ['POST', '/api/finanzas/importar', finanzas.importar],
+  ['GET', '/api/finanzas/presupuestos', finanzas.listarPresupuestos],
+  ['POST', '/api/finanzas/presupuestos', finanzas.crearPresupuesto],
+  ['PATCH', '/api/finanzas/presupuestos/:id', finanzas.actualizarPresupuesto],
+  ['DELETE', '/api/finanzas/presupuestos/:id', finanzas.eliminarPresupuesto],
 
   ['GET', '/api/finanzas/deudas', deudas.listarDeudas],
   ['POST', '/api/finanzas/deudas', deudas.crearDeuda],

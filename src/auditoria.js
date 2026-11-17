@@ -25,6 +25,9 @@ const ACCIONES = {
   redireccion_solicitada: 'Pediste mover dinero ocioso (pago o inversión)',
   redireccion_ejecutada: 'Autorizaste en tu banco un pago o una inversión',
   redireccion_rechazada: 'Un pago o una inversión no se hizo',
+  presupuesto_creado: 'Creaste un presupuesto',
+  presupuesto_actualizado: 'Cambiaste el límite de un presupuesto',
+  presupuesto_eliminado: 'Eliminaste un presupuesto',
 };
 
 async function registrar(usuarioId, accion, detalle = '') {
