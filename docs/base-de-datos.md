@@ -168,7 +168,9 @@ erDiagram
         serial id PK
         int usuario_id FK
         int meta_id FK
-        numeric monto
+        numeric monto "siempre positivo"
+        varchar tipo "aporte o retiro"
+        date fecha
         varchar nota
         timestamptz creado_en
     }
@@ -237,9 +239,9 @@ Hoy no hay un sistema de migraciones: `schema.sql` solo **agrega**. Para cambiar
 
 | Tabla | Para qué | Reglas importantes |
 |---|---|---|
-| `presupuestos` | Límite de gasto mensual por categoría | Única por `(usuario_id, mes, categoria)`. El mes va como `'YYYY-MM'` |
-| `metas` | Metas de ahorro del usuario | `objetivo > 0`. `plazo` es la fecha límite |
-| `aportes_meta` | Pagos parciales hacia una meta | `monto > 0`. Borra en cascada con la meta |
+| `presupuestos` | Límite de gasto mensual por categoría | Única por `(usuario_id, mes, categoria)`. El mes va como `'YYYY-MM'`: es el mes en que se creó. La API usa la fila más reciente de cada categoría, así que un presupuesto sigue valiendo los meses siguientes |
+| `metas` | Metas de ahorro del usuario | `objetivo > 0`. `plazo` es la fecha límite. `nombre` se guarda **cifrado** (`cifrar()`), por eso la ruta lo limita a 40 caracteres |
+| `aportes_meta` | Aportes y retiros de una meta | `monto > 0` siempre; `tipo` = `aporte` (suma) o `retiro` (resta). `fecha` = día del aporte. Borra en cascada con la meta. Lo ahorrado = aportes − retiros |
 | `tokens_recuperacion` | Tokens de un solo uso para recuperar contraseña | Se guarda el **hash** del token, nunca el token real. `usado_en = NULL` significa que aún es válido |
 
 La columna `usuarios.version_sesion` se incrementa al cambiar la contraseña para invalidar todas las sesiones abiertas.

@@ -228,3 +228,9 @@ CREATE INDEX IF NOT EXISTS tokens_recuperacion_usuario_idx ON tokens_recuperacio
 
 -- Columna para invalidar sesiones antiguas al cambiar la contraseña
 ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS version_sesion INTEGER NOT NULL DEFAULT 1;
+
+-- Aportes y RETIROS de una meta (noviembre de 2026, para las rutas de metas).
+-- "monto" sigue siendo siempre positivo (así lo exige su CHECK); "tipo" dice si suma o resta.
+-- "fecha" es el día que la persona dice que hizo el aporte (puede ser distinto de creado_en).
+ALTER TABLE aportes_meta ADD COLUMN IF NOT EXISTS tipo VARCHAR(10) NOT NULL DEFAULT 'aporte' CHECK (tipo IN ('aporte', 'retiro'));
+ALTER TABLE aportes_meta ADD COLUMN IF NOT EXISTS fecha DATE NOT NULL DEFAULT CURRENT_DATE;
