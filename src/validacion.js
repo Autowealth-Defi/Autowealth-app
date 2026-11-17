@@ -40,4 +40,17 @@ function validarIngreso(body) {
   return { datos: { email, password } };
 }
 
-module.exports = { validarRegistro, validarIngreso };
+// Correo para "¿Olvidaste tu contraseña?". Devuelve el correo limpio o '' si no sirve.
+function validarEmail(valor) {
+  const email = texto(valor).toLowerCase();
+  return EMAIL_RE.test(email) && email.length <= 254 ? email : '';
+}
+
+// Mismas reglas de la contraseña que en el registro. Devuelve un mensaje de error o null.
+function validarNuevaContrasena(password) {
+  if (typeof password !== 'string' || password.length < 8) return 'La contraseña debe tener al menos 8 caracteres.';
+  if (password.length > 128) return 'La contraseña es demasiado larga.';
+  return null;
+}
+
+module.exports = { validarRegistro, validarIngreso, validarEmail, validarNuevaContrasena };

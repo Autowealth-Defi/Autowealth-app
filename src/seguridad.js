@@ -58,23 +58,33 @@ function firmar(texto) {
   return crypto.createHmac('sha256', config.sessionSecret).update(texto).digest('base64url');
 }
 
-function crearTokenSesion(usuarioId) {
-  const datos = Buffer.from(JSON.stringify({ uid: usuarioId, exp: Math.floor(Date.now() / 1000) + DURACION_SESION_SEG })).toString('base64url');
+// "version" es usuarios.version_sesion: al cambiar la contraseña sube en 1 y todas las
+// sesiones abiertas con la versión anterior dejan de servir (ver sesion.js).
+function crearTokenSesion(usuarioId, version = 1) {
+  const datos = Buffer.from(JSON.stringify({ uid: usuarioId, v: version, exp: Math.floor(Date.now() / 1000) + DURACION_SESION_SEG })).toString('base64url');
   return datos + '.' + firmar(datos);
 }
 
-function leerTokenSesion(token) {
+// Devuelve { uid, v } si la cookie es válida y no ha vencido, o null.
+// Las cookies creadas antes de existir "v" se leen como versión 1.
+function leerSesion(token) {
   if (!token || typeof token !== 'string' || !token.includes('.')) return null;
   const [datos, firma] = token.split('.');
   const esperada = firmar(datos);
   if (firma.length !== esperada.length || !crypto.timingSafeEqual(Buffer.from(firma), Buffer.from(esperada))) return null;
   try {
-    const { uid, exp } = JSON.parse(Buffer.from(datos, 'base64url').toString('utf8'));
-    if (!Number.isInteger(uid) || exp < Math.floor(Date.now() / 1000)) return null;
-    return uid;
+    const { uid, v = 1, exp } = JSON.parse(Buffer.from(datos, 'base64url').toString('utf8'));
+    if (!Number.isInteger(uid) || !Number.isInteger(v) || exp < Math.floor(Date.now() / 1000)) return null;
+    return { uid, v };
   } catch {
     return null;
   }
+}
+
+// Igual que antes: solo el id del usuario (o null)
+function leerTokenSesion(token) {
+  const sesion = leerSesion(token);
+  return sesion ? sesion.uid : null;
 }
 
 function cookieSesion(token) {
@@ -115,6 +125,6 @@ function crearLimitador({ maximo, ventanaMin }) {
 
 module.exports = {
   crearHashContrasena, verificarContrasena, compararConHashFalso,
-  NOMBRE_COOKIE, crearTokenSesion, leerTokenSesion, cookieSesion, cookieCerrarSesion,
+  NOMBRE_COOKIE, crearTokenSesion, leerSesion, leerTokenSesion, cookieSesion, cookieCerrarSesion,
   crearLimitador,
 };
