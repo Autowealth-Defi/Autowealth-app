@@ -1,7 +1,7 @@
 // =====================================================================
 //  inicio.js — Lógica de la página de inicio (/): tema claro/oscuro, animaciones,
 //  registro e inicio de sesión. Responsable: Aleja.
-//  Llama a la API: /api/registro, /api/ingreso, /api/yo.
+//  Llama a la API: /api/registro, /api/ingreso, /api/recuperar, /api/yo.
 // =====================================================================
 (function() {
     'use strict';
@@ -22,72 +22,6 @@
     setTheme(savedTheme);
     themeButtons.forEach(btn => btn.addEventListener('click', () => setTheme(btn.dataset.theme)));
 
-    // ===== STATS ANIMATION =====
-    const statNumbers = document.querySelectorAll('.stat-number');
-    const observerStats = new IntersectionObserver((entries) => {
-        entries.forEach(entry => {
-            if (entry.isIntersecting && !entry.target.classList.contains('animated')) {
-                const el = entry.target;
-                const raw = el.dataset.value || '0';
-                const isPercent = raw.includes('%');
-                const isMoney = raw.includes('$');
-                const isPlus = raw.startsWith('+');
-                const clean = parseFloat(raw.replace(/[^0-9.]/g, ''));
-                const duration = 2000;
-                const startTime = performance.now();
-                function updateNumber(time) {
-                    const elapsed = time - startTime;
-                    const progress = Math.min(elapsed / duration, 1);
-                    const current = Math.floor(clean * progress);
-                    if (isMoney) el.textContent = '$' + current.toLocaleString();
-                    else if (isPercent) el.textContent = current + '%';
-                    else if (isPlus) el.textContent = '+' + current + '%';
-                    else el.textContent = current.toLocaleString() + '+';
-                    if (progress < 1) requestAnimationFrame(updateNumber);
-                    else {
-                        if (isMoney) el.textContent = '$' + clean.toLocaleString();
-                        else if (isPercent) el.textContent = clean + '%';
-                        else if (isPlus) el.textContent = '+' + clean + '%';
-                        else el.textContent = clean.toLocaleString() + '+';
-                        el.classList.add('animated');
-                    }
-                }
-                requestAnimationFrame(updateNumber);
-            }
-        });
-    }, { threshold: 0.3 });
-    statNumbers.forEach(el => observerStats.observe(el));
-
-    // ===== SLIDER =====
-    const track = document.getElementById('sliderTrack');
-    const prevBtn = document.getElementById('prevSlide');
-    const nextBtn = document.getElementById('nextSlide');
-    const dotsContainer = document.getElementById('sliderDots');
-    const items = track.querySelectorAll('.testimonial-item');
-    let currentIndex = 0;
-    const totalItems = items.length;
-    items.forEach((_, i) => {
-        const dot = document.createElement('span');
-        dot.setAttribute('role', 'tab');
-        dot.setAttribute('aria-label', 'Testimonio ' + (i+1));
-        if (i === 0) dot.classList.add('active');
-        dot.addEventListener('click', () => goToSlide(i));
-        dotsContainer.appendChild(dot);
-    });
-    const dots = dotsContainer.querySelectorAll('span');
-    function goToSlide(index) {
-        currentIndex = (index + totalItems) % totalItems;
-        track.style.transform = 'translateX(-' + (currentIndex * 100) + '%)';
-        dots.forEach((dot, i) => dot.classList.toggle('active', i === currentIndex));
-        track.setAttribute('aria-label', 'Testimonio ' + (currentIndex+1) + ' de ' + totalItems);
-    }
-    prevBtn.addEventListener('click', () => goToSlide(currentIndex - 1));
-    nextBtn.addEventListener('click', () => goToSlide(currentIndex + 1));
-    let autoSlide = setInterval(() => goToSlide(currentIndex + 1), 6000);
-    const sliderWrapper = document.querySelector('.slider-wrapper');
-    sliderWrapper.addEventListener('mouseenter', () => clearInterval(autoSlide));
-    sliderWrapper.addEventListener('mouseleave', () => { autoSlide = setInterval(() => goToSlide(currentIndex + 1), 6000); });
-
     // ===== REVEAL =====
     const revealElements = document.querySelectorAll('.reveal, .reveal-left, .reveal-right, .reveal-scale');
     const revealObserver = new IntersectionObserver((entries) => {
@@ -98,42 +32,6 @@
         });
     }, { threshold: 0.08, rootMargin: '0px 0px -20px 0px' });
     revealElements.forEach(el => revealObserver.observe(el));
-
-    // ===== PRICING TOGGLE =====
-    const billingToggle = document.getElementById('billingToggle');
-    const priceAmounts = document.querySelectorAll('.plan-price .amount');
-
-    function updatePrices(isYearly) {
-        priceAmounts.forEach(el => {
-            const monthly = parseFloat(el.dataset.monthly);
-            const yearly = parseFloat(el.dataset.yearly);
-            const yearlyTotal = el.dataset.yearlyTotal ? parseFloat(el.dataset.yearlyTotal) : (yearly * 12);
-            el.textContent = isYearly ? yearly : monthly;
-            const note = el.closest('.plan-price').querySelector('.yearly-note');
-            if (note) {
-                const annualTotal = isYearly ? yearlyTotal : (monthly * 12);
-                const giftNote = (isYearly && el.dataset.yearlyTotal) ? ' (¡1 mes gratis!)' : '';
-                note.textContent = `o $${annualTotal} al año${giftNote}`;
-            }
-        });
-    }
-
-    billingToggle.addEventListener('change', function() {
-        updatePrices(this.checked);
-    });
-
-    // ===== FORMULARIO DE INGRESO =====
-    document.getElementById('incomeForm').addEventListener('submit', function(e) {
-        e.preventDefault();
-        const income = parseFloat(document.getElementById('income').value) || 0;
-        const subs = parseFloat(document.getElementById('subscriptions').value) || 0;
-        const savings = parseFloat(document.getElementById('savings').value) || 0;
-        const risk = document.getElementById('risk').value;
-        const potential = (subs * 0.7) + (income * 0.05) + (savings * 0.15);
-        const resultDiv = document.getElementById('incomeResult');
-        resultDiv.style.display = 'block';
-        resultDiv.innerHTML = '<h3 style="font-weight:700;">Potencial mensual estimado</h3><p style="font-size:2rem; font-weight:700; color:var(--accent-primary);">$' + potential.toFixed(0) + '</p><p>Basado en tu perfil <strong>' + risk + '</strong>, podrías ahorrar e invertir <strong>$' + potential.toFixed(0) + '</strong> adicionales cada mes.</p><p style="font-size:0.8rem; color:var(--text-muted);">* Estimación basada en patrones de usuarios similares.</p>';
-    });
 
     // ===== OVERLAY =====
     const overlay = document.getElementById('authOverlay');
@@ -146,14 +44,19 @@
     const toggleText = document.getElementById('toggleText');
     const loginFields = document.getElementById('loginFields');
     const registerFields = document.getElementById('registerFields');
+    const recoveryFields = document.getElementById('recoveryFields');
+    const forgotPasswordLink = document.getElementById('forgotPasswordLink');
     const authTitle = document.getElementById('authTitle');
     const authSub = document.getElementById('authSub');
     let isLogin = true;
+    let isRecovering = false;
 
     function openOverlay(mode) {
+        isRecovering = false;
         isLogin = (mode === 'login');
         overlay.classList.add('active');
         document.body.style.overflow = 'hidden';
+        recoveryFields.style.display = 'none';
         if (isLogin) {
             authTitle.textContent = 'Bienvenido de vuelta';
             authSub.textContent = 'Inicia sesión en tu cuenta';
@@ -164,7 +67,7 @@
             document.getElementById('toggleAuthLink').addEventListener('click', () => openOverlay('register'));
         } else {
             authTitle.textContent = 'Crea tu cuenta';
-            authSub.textContent = 'Empieza a construir tu riqueza';
+            authSub.textContent = 'Regístrate para usar el prototipo Auto-Wealth';
             loginFields.style.display = 'none';
             registerFields.style.display = 'block';
             authSubmitBtn.innerHTML = '<i class="fas fa-user-plus"></i> Registrarse';
@@ -184,9 +87,6 @@
     registerOpenBtn.addEventListener('click', () => openOverlay('register'));
     heroRegisterBtn.addEventListener('click', () => openOverlay('register'));
     ctaRegisterBtn.addEventListener('click', () => openOverlay('register'));
-    document.getElementById('freePlanBtn').addEventListener('click', () => openOverlay('register'));
-    document.getElementById('premiumPlanBtn').addEventListener('click', () => openOverlay('register'));
-
     // ===== CONEXIÓN CON EL SERVIDOR (Node.js + base de datos) =====
     // La página y el servidor están en la misma dirección, por eso las rutas empiezan con "/api".
     const FORM_LINK = 'https://forms.gle/q7PYdBcBk3SMQzUPA';
@@ -203,7 +103,9 @@
         if (busy) authSubmitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> ' + label;
     }
     function resetSubmitLabel() {
-        authSubmitBtn.innerHTML = isLogin
+        authSubmitBtn.innerHTML = isRecovering
+            ? '<i class="fas fa-envelope"></i> Enviar enlace'
+            : isLogin
             ? '<i class="fas fa-sign-in-alt"></i> Iniciar sesión'
             : '<i class="fas fa-user-plus"></i> Registrarse';
     }
@@ -226,6 +128,21 @@
         if (!r.ok) throw new Error(r.error || 'Algo salió mal. Intenta de nuevo.');
         return r;
     }
+
+    forgotPasswordLink.addEventListener('click', () => {
+        isLogin = true;
+        isRecovering = true;
+        loginFields.style.display = 'none';
+        registerFields.style.display = 'none';
+        recoveryFields.style.display = 'block';
+        authTitle.textContent = 'Recuperar contraseña';
+        authSub.textContent = 'Escribe el correo asociado a tu cuenta y te enviaremos un enlace.';
+        document.getElementById('recoveryEmail').value = document.getElementById('authEmail').value.trim();
+        authSubmitBtn.innerHTML = '<i class="fas fa-envelope"></i> Enviar enlace';
+        toggleText.innerHTML = '<a id="toggleAuthLink">Volver a iniciar sesión</a>';
+        document.getElementById('toggleAuthLink').addEventListener('click', () => openOverlay('login'));
+        showAuthMsg('');
+    });
 
     // ----- Estado de la sesión en la barra superior -----
     function mostrarSesion(nombre) {
@@ -263,6 +180,9 @@
     }
 
     function openSurveyOverlay(name, correoEnviado) {
+        document.getElementById('surveyTitle').textContent = correoEnviado
+            ? '¡Revisa tu correo!'
+            : '¡Responde la encuesta!';
         document.getElementById('surveySub').textContent = correoEnviado
             ? '¡Bienvenido/a' + (name ? ', ' + name : '') + '! Te enviamos un correo con una breve encuesta sobre tus finanzas.'
             : '¡Bienvenido/a' + (name ? ', ' + name : '') + '! Tu cuenta quedó creada. Responde aquí la breve encuesta sobre tus finanzas.';
@@ -274,7 +194,13 @@
         e.preventDefault();
         showAuthMsg('');
         try {
-            if (isLogin) {
+            if (isRecovering) {
+                const email = document.getElementById('recoveryEmail').value.trim().toLowerCase();
+                if (!isValidEmail(email)) { showAuthMsg('Escribe un correo válido.', true); return; }
+                setBusy(true, 'Enviando...');
+                await api('/api/recuperar', { email });
+                showAuthMsg('Si ese correo está registrado, te enviamos un enlace para crear una contraseña nueva. Revisa también spam.', false);
+            } else if (isLogin) {
                 const email = document.getElementById('authEmail').value.trim().toLowerCase();
                 const password = document.getElementById('authPassword').value;
                 if (!isValidEmail(email) || !password) { showAuthMsg('Escribe tu correo y tu contraseña.', true); return; }

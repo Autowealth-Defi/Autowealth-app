@@ -25,6 +25,19 @@ erDiagram
     conexiones ||--o{ redirecciones : "paga desde"
     deudas ||--o{ redirecciones : "recibe abonos"
     cuentas ||--o{ movimientos : contiene
+    banco_demo_pagos {
+        serial id PK
+        int usuario_id FK
+        varchar institucion
+        varchar cuenta_id_externo
+        date fecha
+        numeric monto
+        varchar concepto
+        timestamptz creado_en
+        usuarios ||--o{ presupuestos : "define"
+    usuarios ||--o{ metas : "se propone"
+    usuarios ||--o{ tokens_recuperacion : "solicita"
+    metas ||--o{ aportes_meta : "recibe"
 
     usuarios {
         serial id PK
@@ -135,14 +148,37 @@ erDiagram
         timestamptz creado_en
         timestamptz ejecutado_en
     }
-    banco_demo_pagos {
+    presupuestos {
         serial id PK
         int usuario_id FK
-        varchar institucion
-        varchar cuenta_id_externo
-        date fecha
+        char mes "YYYY-MM"
+        varchar categoria
+        numeric limite
+        timestamptz creado_en
+    }
+    metas {
+        serial id PK
+        int usuario_id FK
+        varchar nombre
+        numeric objetivo
+        date plazo
+        timestamptz creado_en
+        timestamptz actualizado_en
+    }
+    aportes_meta {
+        serial id PK
+        int usuario_id FK
+        int meta_id FK
         numeric monto
-        varchar concepto
+        varchar nota
+        timestamptz creado_en
+    }
+    tokens_recuperacion {
+        serial id PK
+        int usuario_id FK
+        text token_hash UK "nunca el token real"
+        timestamptz expira_en
+        timestamptz usado_en "NULL = válido"
         timestamptz creado_en
     }
     presupuestos {
@@ -210,37 +246,14 @@ Hoy no hay un sistema de migraciones: `schema.sql` solo **agrega**. Para cambiar
 ```sql
 -- (presupuestos: ✅ ya está en src/schema.sql; ver "Tablas" más arriba)
 
--- Metas de ahorro y sus aportes
-CREATE TABLE IF NOT EXISTS metas (
-    id            SERIAL PRIMARY KEY,
-    usuario_id    INTEGER NOT NULL REFERENCES usuarios(id) ON DELETE CASCADE,
-    nombre        VARCHAR(80)   NOT NULL,
-    objetivo      NUMERIC(16,2) NOT NULL CHECK (objetivo > 0),
-    fecha_limite  DATE,
-    creado_en     TIMESTAMPTZ   NOT NULL DEFAULT now()
-);
-CREATE TABLE IF NOT EXISTS aportes_meta (
-    id          SERIAL PRIMARY KEY,
-    meta_id     INTEGER NOT NULL REFERENCES metas(id) ON DELETE CASCADE,
-    usuario_id  INTEGER NOT NULL REFERENCES usuarios(id) ON DELETE CASCADE,
-    valor       NUMERIC(16,2) NOT NULL,
-    fecha       DATE          NOT NULL,
-    creado_en   TIMESTAMPTZ   NOT NULL DEFAULT now()
-);
+| Tabla | Para qué | Reglas importantes |
+|---|---|---|
+| `presupuestos` | Límite de gasto mensual por categoría | Única por `(usuario_id, mes, categoria)`. El mes va como `'YYYY-MM'` |
+| `metas` | Metas de ahorro del usuario | `objetivo > 0`. `plazo` es la fecha límite |
+| `aportes_meta` | Pagos parciales hacia una meta | `monto > 0`. Borra en cascada con la meta |
+| `tokens_recuperacion` | Tokens de un solo uso para recuperar contraseña | Se guarda el **hash** del token, nunca el token real. `usado_en = NULL` significa que aún es válido |
 
--- Recuperación de contraseña (solo se guarda la HUELLA del token)
-CREATE TABLE IF NOT EXISTS tokens_recuperacion (
-    id          SERIAL PRIMARY KEY,
-    usuario_id  INTEGER NOT NULL REFERENCES usuarios(id) ON DELETE CASCADE,
-    token_hash  VARCHAR(64) NOT NULL UNIQUE,
-    expira_en   TIMESTAMPTZ NOT NULL,
-    usado_en    TIMESTAMPTZ,
-    creado_en   TIMESTAMPTZ NOT NULL DEFAULT now()
-);
-
--- Para cerrar todas las sesiones al cambiar la contraseña
-ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS version_sesion INTEGER NOT NULL DEFAULT 0;
-```
+La columna `usuarios.version_sesion` se incrementa al cambiar la contraseña para invalidar todas las sesiones abiertas.
 
 ## Entornos (ramas de Neon)
 

@@ -360,6 +360,113 @@ async function borrarFinanzas(usuarioId) {
     `UPDATE consentimientos SET estado = 'revocado', revocado_en = now(), state_hash = NULL
       WHERE usuario_id = $1 AND estado IN ('activo', 'pendiente')`, [usuarioId]);
 }
+// ----------------------------- PRESUPUESTOS -----------------------------
+
+async function crearPresupuesto(p) {
+  const { rows } = await pool.query(
+    `INSERT INTO presupuestos (usuario_id, mes, categoria, limite)
+     VALUES ($1, $2, $3, $4)
+     ON CONFLICT (usuario_id, mes, categoria)
+     DO UPDATE SET limite = EXCLUDED.limite
+     RETURNING id`,
+    [p.usuarioId, p.mes, p.categoria, p.limite]
+  );
+  return rows[0].id;
+}
+
+async function listarPresupuestos(usuarioId, mes) {
+  const { rows } = await pool.query(
+    `SELECT p.id, p.mes, p.categoria, p.limite::float8 AS limite,
+            COALESCE(SUM(ABS(m.monto)), 0)::float8 AS gastado
+       FROM presupuestos p
+       LEFT JOIN movimientos m
+              ON m.usuario_id = p.usuario_id
+             AND m.categoria  = p.categoria
+             AND to_char(m.fecha, 'YYYY-MM') = p.mes
+             AND m.monto < 0
+      WHERE p.usuario_id = $1 AND p.mes = $2
+      GROUP BY p.id
+      ORDER BY p.categoria`,
+    [usuarioId, mes]
+  );
+  return rows;
+}
+
+async function eliminarPresupuesto(usuarioId, id) {
+  const { rows } = await pool.query(
+    'DELETE FROM presupuestos WHERE usuario_id = $1 AND id = $2 RETURNING id',
+    [usuarioId, id]
+  );
+  return rows.length > 0;
+}
+
+// -------------------------------- METAS ---------------------------------
+
+async function crearMeta(m) {
+  const { rows } = await pool.query(
+    `INSERT INTO metas (usuario_id, nombre, objetivo, plazo)
+     VALUES ($1, $2, $3, $4) RETURNING id`,
+    [m.usuarioId, m.nombre, m.objetivo, m.plazo]
+  );
+  return rows[0].id;
+}
+
+async function listarMetas(usuarioId) {
+  const { rows } = await pool.query(
+    `SELECT mt.id, mt.nombre, mt.objetivo::float8 AS objetivo, mt.plazo,
+            COALESCE(SUM(a.monto), 0)::float8 AS aportado
+       FROM metas mt
+       LEFT JOIN aportes_meta a ON a.meta_id = mt.id
+      WHERE mt.usuario_id = $1
+      GROUP BY mt.id
+      ORDER BY mt.plazo`,
+    [usuarioId]
+  );
+  return rows;
+}
+
+async function obtenerMeta(usuarioId, id) {
+  const { rows } = await pool.query(
+    `SELECT mt.id, mt.nombre, mt.objetivo::float8 AS objetivo, mt.plazo,
+            COALESCE(SUM(a.monto), 0)::float8 AS aportado
+       FROM metas mt
+       LEFT JOIN aportes_meta a ON a.meta_id = mt.id
+      WHERE mt.usuario_id = $1 AND mt.id = $2
+      GROUP BY mt.id`,
+    [usuarioId, id]
+  );
+  return rows[0] || null;
+}
+
+async function actualizarMeta(usuarioId, id, cambios) {
+  const { rows } = await pool.query(
+    `UPDATE metas SET
+        nombre   = COALESCE($3, nombre),
+        objetivo = COALESCE($4, objetivo),
+        plazo    = COALESCE($5, plazo),
+        actualizado_en = now()
+      WHERE usuario_id = $1 AND id = $2 RETURNING id`,
+    [usuarioId, id, cambios.nombre ?? null, cambios.objetivo ?? null, cambios.plazo ?? null]
+  );
+  return rows.length > 0;
+}
+
+async function eliminarMeta(usuarioId, id) {
+  const { rows } = await pool.query(
+    'DELETE FROM metas WHERE usuario_id = $1 AND id = $2 RETURNING id',
+    [usuarioId, id]
+  );
+  return rows.length > 0;
+}
+
+async function aportarMeta(usuarioId, metaId, monto, nota = '') {
+  const { rows } = await pool.query(
+    `INSERT INTO aportes_meta (usuario_id, meta_id, monto, nota)
+     VALUES ($1, $2, $3, $4) RETURNING id`,
+    [usuarioId, metaId, monto, nota]
+  );
+  return rows[0].id;
+}
 
 module.exports = {
   crearConsentimiento, buscarConsentimientoPorState, cambiarEstadoConsentimiento, listarConsentimientos,
