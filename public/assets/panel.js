@@ -35,21 +35,21 @@
   }
 
   async function api(ruta, opciones = {}) {
+    if (MODO_EJEMPLO) return apiEjemplo(ruta, opciones); // TEMPORAL-EJEMPLO (Paso 10): se borra en A1
     const init = { method: opciones.method || 'GET', credentials: 'same-origin', headers: {} };
     if (opciones.body !== undefined) { init.headers['Content-Type'] = 'application/json'; init.body = JSON.stringify(opciones.body); }
     let res;
-    try { res = await fetch(ruta, init); } catch (e) { throw new Error('No hay conexión con el servidor. Revisa tu internet.'); }
+        try { res = await fetch(ruta, init); } catch (e) { throw Object.assign(new Error('No hay conexión con el servidor. Revisa tu internet.'), { status: 0 }); }
     const datos = await res.json().catch(() => ({ ok: false, error: 'Respuesta inesperada del servidor.' }));
     if (res.status === 401 && datos.sesion === false) { location.href = '/?entrar=1'; throw new Error('Sesión vencida'); }
-    if (!datos.ok) throw new Error(datos.error || 'Algo salió mal.');
+    if (!datos.ok) throw Object.assign(new Error(datos.error || 'Algo salió mal.'), { status: res.status });
     return datos;
   }
 
   // ================= Estado =================
-  const estado = { resumen: null, mes: null, movimientos: [], categorias: null, cuentas: [], conexiones: [], tipos: [], bancos: null, consentimiento: null, filtroCategoria: '' };
-
+  const estado = { resumen: null, mes: null, movimientos: [], categorias: null, cuentas: [], conexiones: [], tipos: [], bancos: null, consentimiento: null, filtroCategoria: '', presupuestos: [], metas: [] };
   // ================= Pestañas =================
-  const PESTANAS = ['resumen', 'movimientos', 'plan', 'cuentas', 'privacidad'];
+  const PESTANAS = ['resumen', 'movimientos', 'metas', 'plan', 'cuentas', 'privacidad'];
   function abrirPestana(nombre, { foco = false } = {}) {
     if (!PESTANAS.includes(nombre)) nombre = 'resumen';
     for (const p of PESTANAS) {
@@ -75,6 +75,7 @@
     const fallo = (e) => aviso('bad', esc(e.message));
     if (nombre === 'resumen') cargarResumen().catch(fallo);
     if (nombre === 'movimientos') cargarMovimientos().catch(fallo);
+    if (nombre === 'metas') cargarMetas().catch((e) => aviso('bad', esc(e.status === 404 || e.status === 405 ? 'La sección de metas y presupuestos todavía no está disponible.' : mensajeError(e))));
     if (nombre === 'plan') cargarPlan().catch(fallo);
     if (nombre === 'cuentas') cargarCuentas().catch(fallo);
     if (nombre === 'privacidad') cargarPrivacidad().catch(fallo);
@@ -115,6 +116,7 @@
 
     dibujarMeses(r.serie, r.mes);
     dibujarCategorias(r.porCategoria, r.gastos);
+    avisarPresupuestos(r.mes);
 
     const iconos = { bien: 'fa-circle-check', atencion: 'fa-triangle-exclamation', alerta: 'fa-circle-exclamation', info: 'fa-lightbulb' };
     $('#consejos').innerHTML = r.recomendaciones.map((c) => `<li class="${c.tipo}"><i class="fas ${iconos[c.tipo] || 'fa-lightbulb'}" aria-hidden="true"></i><span>${esc(c.texto)}</span></li>`).join('');
@@ -312,7 +314,366 @@
     else if (/^-?\d{1,3}(\.\d{3})+$/.test(s)) s = s.replace(/\./g, '');
     return Number(s);
   }
+  
+    // ================= Metas y presupuestos =================
+  // Utilidades de mes. Las usan datosEjemplo() y cargarMetas().
+  const sumarMeses = (m, n) => { const [a, mm] = m.split('-').map(Number); const t = a * 12 + (mm - 1) + n; return `${Math.floor(t / 12)}-${String((t % 12) + 1).padStart(2, '0')}`; };
+  const mesesEntre = (desde, hasta) => { const [a1, m1] = desde.split('-').map(Number), [a2, m2] = hasta.split('-').map(Number); return (a2 * 12 + m2) - (a1 * 12 + m1); };
+  // Misma regla que GET /api/finanzas/resumen (api.md §2): durante los primeros 9 días del mes se usa el mes anterior
+  const mesPorDefecto = () => (Number(hoy().slice(8, 10)) <= 9 ? sumarMeses(hoy().slice(0, 7), -1) : hoy().slice(0, 7));
 
+  // TEMPORAL-EJEMPLO (se borra en el Bloque A1): respuestas de ejemplo con la MISMA forma que api.md
+  function datosEjemplo() {
+    const mes = mesPorDefecto(), mesHoy = hoy().slice(0, 7);
+    const dia = (d) => `${mes}-${String(d).padStart(2, '0')}`;
+    const fechaEn = (meses) => sumarMeses(mesHoy, meses) + '-15';
+
+    const categorias = { ingresos: ['Salario', 'Otros ingresos'], gastos: ['Vivienda', 'Mercado', 'Restaurantes y domicilios', 'Transporte', 'Suscripciones', 'Deudas y créditos', 'Otros gastos'], neutra: 'Movimiento entre cuentas' };
+    const movimientos = [
+      [1, 1, 4200000, 'Salario', 'NÓMINA EMPRESA'],
+      [2, 1, -1200000, 'Vivienda', 'ARRIENDO APARTAMENTO'],
+      [3, 2, -186200, 'Mercado', 'MERCADO SEMANAL'],
+      [4, 6, -132200, 'Mercado', 'FRUVER LA 45'],
+      [5, 3, -48900, 'Restaurantes y domicilios', 'RAPPI'],
+      [6, 4, -18000, 'Restaurantes y domicilios', 'ALMUERZO CORRIENTAZO'],
+      [7, 7, -305000, 'Restaurantes y domicilios', 'CENA DE CUMPLEAÑOS'],
+      [8, 2, -38300, 'Transporte', 'UBER'],
+      [9, 5, -180000, 'Transporte', 'GASOLINA'],
+      [10, 8, -44000, 'Transporte', 'PARQUEADERO CENTRO'],
+    ].map(([id, d, monto, categoria, descripcion]) => ({ id, cuenta_id: 1, origen: 'manual', fecha: dia(d), monto, categoria, cuenta: 'Efectivo y otros', cuenta_tipo: 'efectivo', descripcion }))
+      .sort((a, b) => b.fecha.localeCompare(a.fecha));
+
+    const ingresos = movimientos.filter((m) => m.monto > 0).reduce((a, m) => a + m.monto, 0);
+    const gastos = movimientos.filter((m) => m.monto < 0).reduce((a, m) => a - m.monto, 0);
+    const gastadoPor = {};
+    movimientos.filter((m) => m.monto < 0).forEach((m) => { gastadoPor[m.categoria] = (gastadoPor[m.categoria] || 0) - m.monto; });
+    const porCategoria = Object.entries(gastadoPor).map(([categoria, total]) => ({ categoria, total })).sort((a, b) => b.total - a.total);
+
+    // Presupuestos: regla de api.md §6 → "cerca" desde el 80 %, "excedido" por encima del 100 %
+    const presupuesto = (id, categoria, limite) => {
+      const gastado = gastadoPor[categoria] || 0;
+      return { id, categoria, limite, gastado, porcentaje: Math.round(gastado / limite * 100), estado: gastado > limite ? 'excedido' : gastado >= limite * 0.8 ? 'cerca' : 'bien' };
+    };
+    const presupuestos = [
+      presupuesto(1, 'Mercado', 600000),
+      presupuesto(2, 'Restaurantes y domicilios', 400000),
+      presupuesto(3, 'Transporte', 200000),
+    ];
+
+    // Metas: aporteMensualSugerido = lo que falta ÷ meses que quedan (api.md §6). Sin fecha → null (supuesto, duda 2 para Juanes).
+    const meta = (id, nombre, objetivo, ahorrado, fechaLimite) => {
+      const falta = Math.max(0, objetivo - ahorrado);
+      const aporteMensualSugerido = fechaLimite ? Math.ceil(falta / Math.max(1, mesesEntre(mesHoy, fechaLimite.slice(0, 7)))) : null;
+      return { id, nombre, objetivo, ahorrado, porcentaje: Math.round(ahorrado / objetivo * 100), fechaLimite, aporteMensualSugerido };
+    };
+    const metas = [
+      meta(1, 'Viaje a Cartagena', 3000000, 1200000, fechaEn(7)),
+      meta(2, 'Portátil nuevo 💻', 2500000, 650000, null),
+      meta(3, 'Regalo de cumpleaños de mamá', 400000, 400000, fechaEn(1)),
+      meta(4, 'Matrícula del semestre', 1800000, 900000, fechaEn(-1)),
+    ];
+
+    const previos = [[4200000, 3950370], [4200000, 3610000], [4350000, 3880500], [4200000, 3420900], [4200000, 3705600]];
+    const serie = previos.map(([i, g], k) => ({ mes: sumarMeses(mes, k - 5), ingresos: i, gastos: g })).concat({ mes, ingresos, gastos });
+    const disponible = 5300000;
+    const resumen = {
+      ok: true, usuario: { nombre: 'Ana' }, mesesDisponibles: serie.map((s) => s.mes).reverse(),
+      cuentas: [{ id: 1, origen: 'manual', nombre: 'Efectivo y otros', tipo: 'efectivo', numero_ultimos4: null, institucion: null, saldo: disponible, num_movimientos: movimientos.length }],
+      conexiones: [], mes, ingresos, gastos, ahorro: ingresos - gastos, tasaAhorro: Math.round((ingresos - gastos) / ingresos * 100),
+      disponible, deudaTarjetas: 0, mesesFondo: 1.5, serie, porCategoria, suscripciones: [], hormiga: { cantidad: 0, total: 0 },
+      recomendaciones: presupuestos.filter((p) => p.estado === 'excedido').map((p) => ({ tipo: 'alerta', texto: `Te pasaste del presupuesto de ${p.categoria}: llevas ${pesos(p.gastado)} de ${pesos(p.limite)}.` })),
+    };
+
+    return {
+      '/api/finanzas/resumen': resumen,
+      '/api/finanzas/movimientos': { ok: true, movimientos, categorias },
+      '/api/finanzas/presupuestos': { ok: true, presupuestos },
+      '/api/finanzas/metas': { ok: true, metas },
+    };
+  }
+    // TEMPORAL-EJEMPLO ↓ (Paso 10) — Simulador de la API en memoria. Solo en localhost y con ?ejemplo en la URL.
+  const MODO_EJEMPLO = ['localhost', '127.0.0.1'].includes(location.hostname) && new URLSearchParams(location.search).has('ejemplo');
+  let bdEjemplo = null;
+  async function apiEjemplo(ruta, { method = 'GET', body } = {}) {
+    await new Promise((r) => setTimeout(r, 250));
+    const variante = new URLSearchParams(location.search).get('ejemplo');
+    const esDeMetas = /^\/api\/finanzas\/(presupuestos|metas)/.test(ruta.split('?')[0]);
+    if (variante === 'error' || variante === 'error500') throw Object.assign(new Error('Error simulado del servidor.'), { status: 500 });
+    if (variante === 'error429') throw Object.assign(new Error('Demasiados intentos (simulado).'), { status: 429 });
+    if (variante === 'sin-rutas' && esDeMetas) throw Object.assign(new Error('Respuesta inesperada del servidor.'), { status: 404 });
+    if (variante === 'perdidos' && esDeMetas && method !== 'GET' && /\/\d+(\/aportes)?$/.test(ruta)) throw Object.assign(new Error('No existe (simulado).'), { status: 404 });
+    if (!bdEjemplo) {
+      bdEjemplo = datosEjemplo();
+      if (variante === 'vacio') { bdEjemplo['/api/finanzas/presupuestos'].presupuestos = []; bdEjemplo['/api/finanzas/metas'].metas = []; }
+    }
+    const camino = ruta.split('?')[0], copia = (x) => JSON.parse(JSON.stringify(x)), falla = (msg, status = 400) => { throw Object.assign(new Error(msg), { status }); };
+    const movs = bdEjemplo['/api/finanzas/movimientos'].movimientos, cats = bdEjemplo['/api/finanzas/movimientos'].categorias;
+    const P = bdEjemplo['/api/finanzas/presupuestos'].presupuestos, M = bdEjemplo['/api/finanzas/metas'].metas;
+    const nuevoId = (lista) => Math.max(0, ...lista.map((x) => x.id)) + 1;
+    const positivo = (v, msg) => { if (!Number.isFinite(v) || v <= 0) falla(msg); return v; };
+    const gastadoDe = (cat) => movs.filter((m) => m.monto < 0 && m.categoria === cat).reduce((a, m) => a - m.monto, 0);
+    const calcP = (p) => Object.assign(p, { gastado: gastadoDe(p.categoria), porcentaje: Math.round(gastadoDe(p.categoria) / p.limite * 100), estado: gastadoDe(p.categoria) > p.limite ? 'excedido' : gastadoDe(p.categoria) >= p.limite * 0.8 ? 'cerca' : 'bien' });
+    const calcM = (m) => Object.assign(m, { porcentaje: Math.round(m.ahorrado / m.objetivo * 100), aporteMensualSugerido: m.fechaLimite ? Math.ceil(Math.max(0, m.objetivo - m.ahorrado) / Math.max(1, mesesEntre(hoy().slice(0, 7), m.fechaLimite.slice(0, 7)))) : null });
+    let id;
+
+    if (method === 'GET' && bdEjemplo[camino]) return copia(bdEjemplo[camino]);
+    if (method === 'PATCH' && (id = camino.match(/^\/api\/finanzas\/movimientos\/(\d+)$/))) {
+      const m = movs.find((x) => x.id === Number(id[1])) || falla('No encontramos ese movimiento.');
+      m.categoria = body.categoria; P.forEach(calcP); return { ok: true };
+    }
+    if (method === 'POST' && camino === '/api/finanzas/presupuestos') {
+      if (!cats.gastos.includes(body.categoria)) falla('Elige una categoría de gasto.');
+      if (P.some((p) => p.categoria === body.categoria)) falla('Ya tienes un presupuesto para esa categoría.');
+      const p = calcP({ id: nuevoId(P), categoria: body.categoria, limite: positivo(body.limite, 'El límite debe ser mayor que cero.') });
+      P.push(p); return { ok: true, id: p.id };
+    }
+    if ((id = camino.match(/^\/api\/finanzas\/presupuestos\/(\d+)$/))) {
+      const i = P.findIndex((x) => x.id === Number(id[1])); if (i < 0) falla('No encontramos ese presupuesto.');
+      if (method === 'PATCH') { P[i].limite = positivo(body.limite, 'El límite debe ser mayor que cero.'); calcP(P[i]); return { ok: true }; }
+      if (method === 'DELETE') { P.splice(i, 1); return { ok: true }; }
+    }
+    if (method === 'POST' && camino === '/api/finanzas/metas') {
+      const nombre = String(body.nombre || '').trim();
+      if (!nombre || nombre.length > 60) falla('El nombre debe tener entre 1 y 60 caracteres.');
+      if (body.fechaLimite && body.fechaLimite < hoy()) falla('La fecha límite no puede estar en el pasado.');
+      const m = calcM({ id: nuevoId(M), nombre, objetivo: positivo(body.objetivo, 'El objetivo debe ser mayor que cero.'), ahorrado: 0, fechaLimite: body.fechaLimite || null });
+      M.push(m); return { ok: true, id: m.id };
+    }
+    if (method === 'POST' && (id = camino.match(/^\/api\/finanzas\/metas\/(\d+)\/aportes$/))) {
+      const m = M.find((x) => x.id === Number(id[1])) || falla('No encontramos esa meta.');
+      if (!Number.isFinite(body.valor) || body.valor === 0) falla('El valor no puede ser cero.');
+      if (m.ahorrado + body.valor < 0) falla(`Solo puedes retirar hasta ${pesos(m.ahorrado)}.`);
+      m.ahorrado += body.valor; calcM(m); return { ok: true, ahorrado: m.ahorrado };
+    }
+    if (method === 'DELETE' && (id = camino.match(/^\/api\/finanzas\/metas\/(\d+)$/))) {
+      const i = M.findIndex((x) => x.id === Number(id[1])); if (i < 0) falla('No encontramos esa meta.');
+      M.splice(i, 1); return { ok: true };
+    }
+    falla('Esta sección no tiene datos de ejemplo todavía.');
+  }
+  // TEMPORAL-EJEMPLO ↑
+
+  // Paso 4: estructura vacía. El dibujo real llega en los pasos 6 a 8 y las llamadas a api() en el Bloque A.
+    // ----- Presupuestos -----
+  // [texto, clase (la misma de .chip, .relleno e .ico), ícono]. Los íconos son los de #consejos en el Resumen.
+  const ESTADOS_PRESUPUESTO = {
+    bien: ['Vas bien', 'ok', 'fa-circle-check'],
+    cerca: ['Cerca del límite', 'warn', 'fa-triangle-exclamation'],
+    excedido: ['Te pasaste', 'bad', 'fa-circle-exclamation'],
+  };
+
+  async function cargarMetas() {
+    const mes = estado.mes || mesPorDefecto();
+    $('#metasMes').textContent = 'Presupuestos de ' + nombreMes(mes);
+    $('#metasEjemplo').hidden = !MODO_EJEMPLO; // TEMPORAL-EJEMPLO
+    const [p, m] = await Promise.all([api('/api/finanzas/presupuestos?mes=' + encodeURIComponent(mes)), api('/api/finanzas/metas')]);
+    estado.presupuestos = p.presupuestos; estado.metas = m.metas;
+    dibujarPresupuestos(p.presupuestos, mes);
+    dibujarMetas(m.metas);
+  }
+
+  // Filas al estilo de "Tus deudas" (.deuda-fila); la barra comparte el estilo de dibujarCategorias (.pista/.relleno)
+  function dibujarPresupuestos(lista, mes) {
+    const cont = $('#listaPresupuestos');
+    if (!lista.length) { cont.innerHTML = '<p class="vacio" role="listitem" style="text-align:left;padding:12px 0">Aún no tienes presupuestos. Crea uno para ponerle un tope a una categoría.</p>'; return; }
+    const esActual = mes === hoy().slice(0, 7);
+    const orden = [...lista].sort((a, b) => (Number(b.porcentaje) || 0) - (Number(a.porcentaje) || 0));
+    cont.innerHTML = orden.map((p) => {
+      const [txt, cls, ico] = ESTADOS_PRESUPUESTO[p.estado] || ['Sin estado', '', 'fa-circle-info'];
+      const pct = Number(p.porcentaje) || 0, resto = p.limite - p.gastado;
+      const linea = resto >= 0 ? `${esActual ? 'Te quedan' : 'Sobraron'} ${pesos(resto)}` : `${pesos(resto)} por encima del límite`;
+      const cat = esc(p.categoria), id = esc(p.id);
+      return `<div class="deuda-fila" role="listitem">
+        <span class="ico ${cls}"><i class="fas ${ico}" aria-hidden="true"></i></span>
+        <div style="min-width:0"><b>${cat}</b> <span class="chip ${cls}"><i class="fas ${ico}" aria-hidden="true"></i>${txt}</span>
+          <div class="progreso" aria-hidden="true"><span class="relleno ${cls}" style="width:${Math.min(100, Math.max(pct > 0 ? 2 : 0, pct))}%"></span></div>
+          <span class="detalle">${Math.round(pct)} % · ${linea}</span></div>
+        <span class="num" style="text-align:right"><b>${pesos(p.gastado)}</b><br><span class="detalle">de ${pesos(p.limite)}</span></span>
+        <span class="acciones-fila">
+          <button type="button" class="borrar" data-ver-cat="${cat}" aria-label="Ver los gastos de ${cat}"><i class="fas fa-list" aria-hidden="true"></i></button>
+          <button type="button" class="borrar" data-editar-presupuesto="${id}" aria-label="Editar el presupuesto de ${cat}"><i class="fas fa-pen" aria-hidden="true"></i></button>
+          <button type="button" class="borrar" data-borrar-presupuesto="${id}" data-nombre="${cat}" aria-label="Borrar el presupuesto de ${cat}"><i class="fas fa-trash-can" aria-hidden="true"></i></button>
+        </span>
+      </div>`;
+    }).join('');
+  }
+  const MONTO_MAXIMO = 999999999;
+  const montoValido = (v) => Number.isFinite(v) && v > 0 && v <= MONTO_MAXIMO;
+  function mensajeError(err) {
+    const s = err && err.status;
+    if (s === 401) return 'Tu sesión terminó. Vuelve a entrar.';
+    if (s === 403) return 'No pudimos confirmar que la petición venga de esta página. Recárgala e intenta de nuevo.';
+    if (s === 404) return 'No encontramos ese elemento: quizá ya se borró. Actualizamos la lista.';
+    if (s === 405) return 'Esta función todavía no está disponible en el servidor.';
+    if (s === 429) return 'Hiciste muchos intentos seguidos. Espera un momento y vuelve a intentarlo.';
+    if (s >= 500) return 'Algo falló en el servidor. Intenta de nuevo en unos minutos.';
+    return err.message;
+  }
+  async function errorEnDialogo(err, dlg, caja, sobreExistente) {
+    if (err.status === 404 && sobreExistente) { dlg.close(); aviso('bad', esc(mensajeError(err))); await cargarMetas().catch(() => {}); return; }
+    caja.textContent = err.status === 404 ? 'Esta función todavía no está disponible en el servidor.' : mensajeError(err);
+    caja.hidden = false;
+  }
+  async function borrarSiExiste(ruta) {
+    try { await api(ruta, { method: 'DELETE' }); } catch (err) { if (err.status !== 404) throw new Error(mensajeError(err)); }
+  }
+
+  // Lleva a Movimientos filtrado por categoría y en el mes del Resumen
+  function verGastos(categoria) {
+    estado.filtroCategoria = categoria;
+    delete $('#fMes').dataset.listo;
+    abrirPestana('movimientos');
+  }
+  // Ver gastos → Movimientos filtrado (mismo patrón que dibujarCategorias). Editar y borrar se agregan en el paso 7.
+    // ----- Crear / editar un presupuesto (mismo patrón que abrirDeuda) -----
+  async function abrirPresupuesto(p) {
+    if (!estado.categorias) { const d = await api('/api/finanzas/movimientos?mes=' + hoy().slice(0, 7)); estado.categorias = d.categorias; }
+    const usadas = new Set(estado.presupuestos.map((x) => x.categoria));
+    const libres = p ? [p.categoria] : estado.categorias.gastos.filter((c) => !usadas.has(c));
+    if (!libres.length) { aviso('info', 'Ya tienes un presupuesto en cada categoría de gasto. Puedes editar el límite de cualquiera de ellos.'); return; }
+    $('#prCategoria').innerHTML = libres.map((c) => `<option>${esc(c)}</option>`).join('');
+    $('#prCategoria').disabled = !!p;
+    $('#dlgPresTitulo').textContent = p ? 'Editar el presupuesto de ' + p.categoria : 'Crear un presupuesto';
+    $('#prSub').textContent = p ? 'La categoría no se puede cambiar. Si quieres otra, borra este presupuesto y crea uno nuevo.' : 'Elige una categoría de gasto y cuánto quieres gastar como máximo en el mes.';
+    $('#prLimite').value = p ? Math.round(p.limite).toLocaleString('es-CO') : '';
+    $('#prGuardar').textContent = p ? 'Guardar cambios' : 'Crear presupuesto';
+    $('#formPresupuesto').dataset.id = p ? p.id : '';
+    $('#prError').hidden = true;
+    $('#dlgPresupuesto').showModal(); (p ? $('#prLimite') : $('#prCategoria')).focus();
+  }
+  $('#btnNuevoPresupuesto').addEventListener('click', () => abrirPresupuesto(null).catch((err) => aviso('bad', esc(err.message))));
+  $('#formPresupuesto').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const id = e.target.dataset.id, btn = $('#prGuardar'); btn.disabled = true; $('#prError').hidden = true;
+    const limite = leerNumero($('#prLimite').value);
+    try {
+      if (!montoValido(limite)) throw new Error('Escribe un límite entre $1 y $999.999.999, por ejemplo 400.000.');
+      if (id) await api('/api/finanzas/presupuestos/' + encodeURIComponent(id), { method: 'PATCH', body: { limite } });
+      else await api('/api/finanzas/presupuestos', { method: 'POST', body: { categoria: $('#prCategoria').value, limite } });
+      $('#dlgPresupuesto').close(); toast(id ? 'Presupuesto actualizado' : 'Presupuesto creado'); await cargarMetas();
+    } catch (err) { $('#prError').textContent = err.message; $('#prError').hidden = false; } finally { btn.disabled = false; }
+  });
+
+  // ----- Ver gastos, editar y borrar (delegación en la lista, como #listaDeudas) -----
+  $('#listaPresupuestos').addEventListener('click', (e) => {
+    const ver = e.target.closest('[data-ver-cat]'), ed = e.target.closest('[data-editar-presupuesto]'), bo = e.target.closest('[data-borrar-presupuesto]');
+    if (ver) verGastos(ver.dataset.verCat);
+    if (ed) {
+      const p = estado.presupuestos.find((x) => String(x.id) === ed.dataset.editarPresupuesto);
+      if (p) abrirPresupuesto(p).catch((err) => aviso('bad', esc(err.message)));
+    }
+    if (bo) {
+      confirmar({ titulo: `Borrar el presupuesto de ${bo.dataset.nombre}`, texto: 'Dejarás de ver el tope y los avisos de esta categoría. Tus movimientos no se borran.', boton: 'Borrar presupuesto' }, async () => {
+        await api('/api/finanzas/presupuestos/' + encodeURIComponent(bo.dataset.borrarPresupuesto), { method: 'DELETE' });
+        toast('Presupuesto borrado'); await cargarMetas();
+      });
+    }
+  });
+
+    // ----- Metas -----
+  function estadoMeta(m) {
+    if (m.ahorrado >= m.objetivo) return { cumplida: true, cls: 'bien', ico: 'fa-circle-check', relleno: 'ok', chip: '<span class="chip ok"><i class="fas fa-circle-check" aria-hidden="true"></i>Meta cumplida</span>' };
+    if (m.fechaLimite && m.fechaLimite.slice(0, 10) < hoy()) return { vencida: true, cls: 'atencion', ico: 'fa-triangle-exclamation', relleno: 'warn', chip: `<span class="chip warn"><i class="fas fa-triangle-exclamation" aria-hidden="true"></i>Venció el ${esc(fechaCorta(m.fechaLimite))}</span>` };
+    if (m.fechaLimite) return { cls: 'info', ico: 'fa-bullseye', relleno: '', chip: `<span class="chip"><i class="fas fa-calendar" aria-hidden="true"></i>Hasta ${esc(fechaCorta(m.fechaLimite))}</span>` };
+    return { cls: 'info', ico: 'fa-bullseye', relleno: '', chip: '<span class="chip">Sin fecha límite</span>' };
+  }
+  function dibujarMetas(lista) {
+    const ul = $('#listaMetas');
+    $('#metasVacio').hidden = lista.length > 0;
+    ul.hidden = !lista.length;
+    ul.innerHTML = lista.map((m) => {
+      const e = estadoMeta(m), nombre = esc(m.nombre), id = esc(m.id);
+      const pct = Number(m.porcentaje) || 0, falta = Math.max(0, m.objetivo - m.ahorrado);
+      const consejo = e.cumplida ? `Lo lograste: ahorraste ${pesos(m.ahorrado)}.`
+        : e.vencida ? `Te faltan ${pesos(falta)}. Puedes seguir aportando o borrar la meta.`
+          : m.aporteMensualSugerido != null ? `Ahorra ${pesos(m.aporteMensualSugerido)} al mes para llegar a tiempo.`
+            : `Te faltan ${pesos(falta)}. Aporta a tu ritmo.`;
+      return `<li class="${e.cls}"><i class="fas ${e.ico}" aria-hidden="true"></i><div>
+        <b>${nombre}</b> ${e.chip}
+        <div class="progreso" aria-hidden="true"><span class="relleno ${e.relleno}" style="width:${Math.min(100, Math.max(pct > 0 ? 2 : 0, pct))}%"></span></div>
+        <span class="num">${pesos(m.ahorrado)}</span> de <span class="num">${pesos(m.objetivo)}</span> <span class="num">· ${Math.round(pct)} %</span>
+        <span class="detalle">${consejo}</span>
+        <div class="acciones">
+          ${e.cumplida ? '' : `<button type="button" class="btn chico" data-aportar="${id}" aria-label="Aportar a ${nombre}"><i class="fas fa-plus" aria-hidden="true"></i> Aportar</button>`}
+          ${m.ahorrado > 0 ? `<button type="button" class="btn chico" data-retirar="${id}" aria-label="Retirar de ${nombre}"><i class="fas fa-minus" aria-hidden="true"></i> Retirar</button>` : ''}
+          <button type="button" class="borrar" data-borrar-meta="${id}" data-nombre="${nombre}" aria-label="Borrar la meta ${nombre}"><i class="fas fa-trash-can" aria-hidden="true"></i></button>
+        </div></div></li>`;
+    }).join('');
+  }
+
+  function abrirMeta() {
+    $('#mtNombre').value = ''; $('#mtObjetivo').value = ''; $('#mtFecha').value = ''; $('#mtFecha').min = hoy(); $('#mtError').hidden = true;
+    $('#dlgMeta').showModal(); $('#mtNombre').focus();
+  }
+  $('#btnNuevaMeta').addEventListener('click', abrirMeta);
+  $('#btnPrimeraMeta').addEventListener('click', abrirMeta);
+  $('#formMeta').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const btn = $('#mtGuardar'); btn.disabled = true; $('#mtError').hidden = true;
+    const objetivo = leerNumero($('#mtObjetivo').value);
+    try {
+      if (!montoValido(objetivo)) throw new Error('Escribe un valor entre $1 y $999.999.999, por ejemplo 3.000.000.');
+      await api('/api/finanzas/metas', { method: 'POST', body: { nombre: $('#mtNombre').value.trim(), objetivo, fechaLimite: $('#mtFecha').value || null } });
+      $('#dlgMeta').close(); toast('Meta creada'); await cargarMetas();
+    } catch (err) { $('#mtError').textContent = err.message; $('#mtError').hidden = false; } finally { btn.disabled = false; }
+  });
+
+  function abrirAporte(m, modo) {
+    const retiro = modo === 'retiro';
+    $('#dlgAporteTitulo').textContent = (retiro ? 'Retirar de ' : 'Aportar a ') + m.nombre;
+    $('#apSub').textContent = `Llevas ${pesos(m.ahorrado)} de ${pesos(m.objetivo)}.` + (retiro ? ' Puedes retirar hasta lo que llevas ahorrado.' : '');
+    $('#apValorLabel').textContent = retiro ? 'Cuánto retiras (COP)' : 'Cuánto aportas (COP)';
+    $('#apGuardar').textContent = retiro ? 'Retirar' : 'Aportar';
+    $('#apValor').value = ''; $('#apFecha').value = hoy(); $('#apFecha').max = hoy(); $('#apError').hidden = true;
+    $('#formAporte').dataset.id = m.id; $('#formAporte').dataset.modo = modo;
+    $('#dlgAporte').showModal(); $('#apValor').focus();
+  }
+  $('#formAporte').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const { id, modo } = e.target.dataset, btn = $('#apGuardar'); btn.disabled = true; $('#apError').hidden = true;
+    const meta = estado.metas.find((x) => String(x.id) === id), valor = leerNumero($('#apValor').value);
+    try {
+      if (!montoValido(valor)) throw new Error('Escribe un valor entre $1 y $999.999.999, por ejemplo 100.000.');
+      if (modo === 'retiro' && meta && valor > meta.ahorrado) throw new Error(`Solo puedes retirar hasta ${pesos(meta.ahorrado)}, que es lo que llevas ahorrado.`);
+      const r = await api('/api/finanzas/metas/' + encodeURIComponent(id) + '/aportes', { method: 'POST', body: { valor: modo === 'retiro' ? -valor : valor, fecha: $('#apFecha').value || hoy() } });
+      $('#dlgAporte').close(); toast(`${modo === 'retiro' ? 'Retiro' : 'Aporte'} registrado. Llevas ${pesos(r.ahorrado)}.`); await cargarMetas();
+    } catch (err) { $('#apError').textContent = err.message; $('#apError').hidden = false; } finally { btn.disabled = false; }
+  });
+
+  $('#listaMetas').addEventListener('click', (e) => {
+    const ap = e.target.closest('[data-aportar]'), re = e.target.closest('[data-retirar]'), bo = e.target.closest('[data-borrar-meta]');
+    const buscar = (id) => estado.metas.find((x) => String(x.id) === id);
+    if (ap && buscar(ap.dataset.aportar)) abrirAporte(buscar(ap.dataset.aportar), 'aporte');
+    if (re && buscar(re.dataset.retirar)) abrirAporte(buscar(re.dataset.retirar), 'retiro');
+    if (bo) {
+      confirmar({ titulo: `Borrar la meta "${bo.dataset.nombre}"`, texto: 'La meta y sus aportes saldrán de tus registros. No se mueve dinero de tu banco.', boton: 'Borrar meta' }, async () => {
+        await api('/api/finanzas/metas/' + encodeURIComponent(bo.dataset.borrarMeta), { method: 'DELETE' });
+        toast('Meta borrada'); await cargarMetas();
+      });
+    }
+  });
+
+    // ----- Aviso en el Resumen: presupuestos cerca del límite o excedidos -----
+  let pedidoAviso = 0;
+  async function avisarPresupuestos(mes) {
+    const ul = $('#alertasPresupuesto'), pedido = ++pedidoAviso;
+    let lista = [];
+        try { lista = (await api('/api/finanzas/presupuestos?mes=' + encodeURIComponent(mes))).presupuestos; } catch (e) { lista = []; if (e.status !== 404) console.warn('[Auto-Wealth] Aviso de presupuestos:', e.status, e.message); }
+    if (pedido !== pedidoAviso) return; 
+    const riesgo = lista.filter((p) => p.estado === 'excedido' || p.estado === 'cerca').sort((a, b) => (Number(b.porcentaje) || 0) - (Number(a.porcentaje) || 0));
+    ul.hidden = !riesgo.length;
+    ul.innerHTML = riesgo.map((p) => {
+      const cat = esc(p.categoria), pct = Math.round(Number(p.porcentaje) || 0), excedido = p.estado === 'excedido';
+      return `<li class="${excedido ? 'alerta' : 'atencion'}"><i class="fas ${excedido ? 'fa-circle-exclamation' : 'fa-triangle-exclamation'}" aria-hidden="true"></i>
+        <span>${excedido ? `<b>Te pasaste en ${cat}:</b> llevas ${pesos(p.gastado)} de ${pesos(p.limite)} (${pct} %).` : `<b>Vas en el ${pct} % de ${cat}:</b> te quedan ${pesos(p.limite - p.gastado)} de ${pesos(p.limite)}.`}</span>
+        <button type="button" class="btn chico" data-ver-cat="${cat}" aria-label="Ver los gastos de ${cat}">Ver gastos</button></li>`;
+    }).join('');
+  }
+  $('#alertasPresupuesto').addEventListener('click', (e) => {
+    const b = e.target.closest('[data-ver-cat]');
+    if (b) verGastos(b.dataset.verCat);
+  });
+  
   // ================= Deudas y plan =================
   // El plan lo calcula el servidor (GET /api/finanzas/plan). Aquí solo se muestra y se piden los pagos.
   // Todo pago se confirma en el banco: esta página nunca mueve dinero por sí sola.
@@ -763,6 +1124,6 @@
     error: ['bad', 'No pudimos confirmar el pago con tu banco. Revisa el historial antes de intentarlo de nuevo.'],
   };
   if (MENSAJES_PAGO[pago]) { aviso(...MENSAJES_PAGO[pago]); history.replaceState(null, '', location.pathname + location.hash); }
-
+  if (MODO_EJEMPLO) aviso('info', '<b>Modo de ejemplo.</b> Los datos son ficticios y los cambios se pierden al recargar la página.'); // TEMPORAL-EJEMPLO
   abrirPestana((location.hash || '#resumen').slice(1));
 })();

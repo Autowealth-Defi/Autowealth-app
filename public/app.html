@@ -23,6 +23,7 @@
   <nav class="pestanas" role="tablist" aria-label="Secciones del panel">
     <button role="tab" id="t-resumen" aria-controls="p-resumen" aria-selected="true" data-tab="resumen">Resumen</button>
     <button role="tab" id="t-movimientos" aria-controls="p-movimientos" aria-selected="false" data-tab="movimientos">Movimientos</button>
+    <button type="button" role="tab" id="t-metas" aria-controls="p-metas" aria-selected="false" data-tab="metas">Metas y presupuestos</button>
     <button role="tab" id="t-plan" aria-controls="p-plan" aria-selected="false" data-tab="plan">Deudas y plan</button>
     <button role="tab" id="t-cuentas" aria-controls="p-cuentas" aria-selected="false" data-tab="cuentas">Cuentas y bancos</button>
     <button role="tab" id="t-privacidad" aria-controls="p-privacidad" aria-selected="false" data-tab="privacidad">Privacidad</button>
@@ -53,6 +54,8 @@
         <p class="declaracion" id="declaracion"></p>
         <p class="remate" id="remate"></p>
         <div class="datos-linea" id="datosLinea"></div>
+
+        <ul class="consejos" id="alertasPresupuesto" aria-label="Avisos de tus presupuestos" style="margin-bottom:20px" hidden></ul>
 
         <div class="grid-2">
           <div class="bloque">
@@ -141,6 +144,32 @@
           <p class="sub">Lo que has movido desde Auto-Wealth. En este prototipo todo es simulado con el banco de prueba.</p>
           <div class="datos-linea" id="totalesRedir" style="border-top:0;padding-top:0;margin-bottom:8px"></div>
           <ul class="lista" id="historialRedir"></ul>
+        </div>
+      </div>
+    </section>
+
+        <!-- ======================= METAS Y PRESUPUESTOS ======================= -->
+    <section role="tabpanel" id="p-metas" aria-labelledby="t-metas" hidden>
+      <div class="pila">
+        <div class="bloque">
+          <div class="cabecera-mes"><span class="mes-etiqueta" id="metasMes"></span><span class="chip" id="metasEjemplo" hidden>Datos de ejemplo</span></div>
+          <div class="titulo-accion">
+            <div><h2 id="tituloPresupuestos">Presupuestos del mes</h2><p class="sub" style="margin-bottom:0">Ponle un tope a lo que gastas en cada categoría. Te avisamos cuando llegues al 80 %.</p></div>
+            <button type="button" class="btn primario" id="btnNuevoPresupuesto"><i class="fas fa-plus" aria-hidden="true"></i> Crear presupuesto</button>
+          </div>
+          <div id="listaPresupuestos" role="list" aria-labelledby="tituloPresupuestos" style="margin-top:8px"></div>
+        </div>
+
+        <div class="bloque">
+          <div class="titulo-accion">
+            <div><h2 id="tituloMetas">Metas de ahorro</h2><p class="sub" style="margin-bottom:0">Lo que registras aquí es un apartado para organizarte: no mueve dinero de tu banco.</p></div>
+            <button type="button" class="btn primario" id="btnNuevaMeta"><i class="fas fa-plus" aria-hidden="true"></i> Crear meta</button>
+          </div>
+          <ul class="consejos metas" id="listaMetas" aria-labelledby="tituloMetas" style="margin-top:14px"></ul>
+          <div class="vacio" id="metasVacio" hidden>
+            <p style="margin:0 0 14px">Aún no tienes metas. Ponle nombre a algo por lo que estés ahorrando y mira cómo avanzas.</p>
+            <button type="button" class="btn primario" id="btnPrimeraMeta"><i class="fas fa-bullseye" aria-hidden="true"></i> Crear mi primera meta</button>
+          </div>
         </div>
       </div>
     </section>
@@ -315,6 +344,58 @@
       <div class="pie">
         <button type="button" class="btn" data-cerrar>Cancelar</button>
         <button type="submit" class="btn primario" id="dGuardar">Guardar deuda</button>
+      </div>
+    </form>
+  </dialog>
+
+    <dialog id="dlgPresupuesto" aria-labelledby="dlgPresTitulo">
+    <form class="dlg" id="formPresupuesto" method="dialog">
+      <h2 id="dlgPresTitulo">Crear un presupuesto</h2>
+      <p class="sub" id="prSub">Elige una categoría de gasto y cuánto quieres gastar como máximo en el mes.</p>
+      <div class="grid-form">
+        <div class="campo"><label for="prCategoria">Categoría</label><select id="prCategoria" required></select></div>
+        <div class="campo"><label for="prLimite">Límite mensual (COP)</label><input id="prLimite" inputmode="numeric" placeholder="Ej. 400.000" required aria-describedby="prAyuda"></div>
+      </div>
+      <p class="sub" id="prAyuda" style="margin:10px 0 0">Te avisaremos cuando llegues al 80 % del límite y cuando lo pases.</p>
+      <p class="error-form" id="prError" role="alert" hidden></p>
+      <div class="pie">
+        <button type="button" class="btn" data-cerrar>Cancelar</button>
+        <button type="submit" class="btn primario" id="prGuardar">Crear presupuesto</button>
+      </div>
+    </form>
+  </dialog>
+
+    <dialog id="dlgMeta" aria-labelledby="dlgMetaTitulo">
+    <form class="dlg" id="formMeta" method="dialog">
+      <h2 id="dlgMetaTitulo">Crear una meta de ahorro</h2>
+      <p class="sub">Ponle nombre a lo que quieres lograr. Es un apartado para organizarte: no mueve dinero de tu banco.</p>
+      <div class="grid-form">
+        <div class="campo ancho"><label for="mtNombre">Nombre</label><input id="mtNombre" maxlength="60" placeholder="Ej. Viaje a Cartagena, portátil, matrícula" required></div>
+        <div class="campo"><label for="mtObjetivo">Cuánto quieres ahorrar (COP)</label><input id="mtObjetivo" inputmode="numeric" placeholder="Ej. 3.000.000" required></div>
+        <div class="campo"><label for="mtFecha">Para cuándo (opcional)</label><input type="date" id="mtFecha" aria-describedby="mtAyuda"></div>
+      </div>
+      <p class="sub" id="mtAyuda" style="margin:10px 0 0">Si pones una fecha, te diremos cuánto ahorrar cada mes para llegar a tiempo.</p>
+      <p class="error-form" id="mtError" role="alert" hidden></p>
+      <div class="pie">
+        <button type="button" class="btn" data-cerrar>Cancelar</button>
+        <button type="submit" class="btn primario" id="mtGuardar">Crear meta</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="dlgAporte" aria-labelledby="dlgAporteTitulo">
+    <form class="dlg" id="formAporte" method="dialog">
+      <h2 id="dlgAporteTitulo"></h2>
+      <p class="sub" id="apSub"></p>
+      <div class="grid-form">
+        <div class="campo"><label for="apValor" id="apValorLabel">Cuánto aportas (COP)</label><input id="apValor" inputmode="numeric" placeholder="Ej. 100.000" required></div>
+        <div class="campo"><label for="apFecha">Fecha</label><input type="date" id="apFecha" required></div>
+      </div>
+      <p class="nota-segura"><i class="fas fa-circle-info" aria-hidden="true"></i><span>Esto es un registro para organizarte: no mueve dinero de tu banco.</span></p>
+      <p class="error-form" id="apError" role="alert" hidden></p>
+      <div class="pie">
+        <button type="button" class="btn" data-cerrar>Cancelar</button>
+        <button type="submit" class="btn primario" id="apGuardar">Aportar</button>
       </div>
     </form>
   </dialog>
