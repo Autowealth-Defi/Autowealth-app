@@ -6,6 +6,8 @@
 
 > Regla de tu área: **el contrato manda**. Antes de programar una ruta, su formato está en `docs/api.md` y el equipo lo conoce. Si cambias un formato, avisa a David y a Aleja.
 
+> **Estado al 17 de noviembre:** presupuestos, metas, recuperar contraseña, recomendaciones de presupuestos y cierre de sesiones están en la rama `feature/juanes-api-final` con pruebas. Lo marcado con [x] está hecho; lo que queda es revisar en Render, la integración con las pantallas y la presentación.
+
 > **Actualizado el 2 de noviembre.** La presentación final es el **viernes 20 de noviembre**. Calendario y prioridades del equipo en [README.md](README.md). Orden de tus prioridades: **presupuestos → metas → recuperar contraseña**. Lo demás queda en "Si sobra tiempo".
 
 ---
@@ -27,25 +29,25 @@ Estas tareas eran de las primeras semanas. Si alguna falta, hazla primero: bloqu
 
 ### Sesión 1 · Rutas de presupuestos
 - [ ] Crea la rama `feature/juanes-presupuestos`.
-- [ ] En `src/finanzas/rutas.js` agrega `listarPresupuestos`, `crearPresupuesto`, `actualizarPresupuesto` y `eliminarPresupuesto`. Sigue el estilo de `crearCuenta`: `exigirUsuario` → validar → llamar a `fdb` → `enviarJson`.
-- [ ] Validaciones: la categoría debe estar en `GASTOS` (`categorias.js`), y el límite debe ser mayor que 0 y menor que 10.000 millones.
-- [ ] Calcula `gastado`, `porcentaje` y `estado` (`bien` hasta 79 %, `cerca` de 80 % a 100 %, `excedido` más de 100 %) con los movimientos del mes.
-- [ ] Registra las rutas en la tabla `API` de `server.js`.
+- [x] En `src/finanzas/rutas.js` agrega `listarPresupuestos`, `crearPresupuesto`, `actualizarPresupuesto` y `eliminarPresupuesto`. Sigue el estilo de `crearCuenta`: `exigirUsuario` → validar → llamar a `fdb` → `enviarJson`.
+- [x] Validaciones: la categoría debe estar en `GASTOS` (`categorias.js`), y el límite debe ser mayor que 0 y menor que 10.000 millones.
+- [x] Calcula `gastado`, `porcentaje` y `estado` (`bien` hasta 79 %, `cerca` de 80 % a 100 %, `excedido` más de 100 %) con los movimientos del mes.
+- [x] Registra las rutas en la tabla `API` de `server.js`.
 
 **Listo cuando:** las 4 rutas responden en Thunder Client o Postman con el formato del contrato.
 **Pídele a Claude:** *"Implementa las rutas de presupuestos de docs/api.md §6 en src/finanzas/rutas.js siguiendo el estilo de crearCuenta. Usa las funciones de src/finanzas/db.js que hizo Garavito. No cambies otras rutas."*
 
 ### Sesión 2 · Rutas de metas de ahorro
 - [ ] Rama `feature/juanes-metas`.
-- [ ] Rutas `GET/POST /api/finanzas/metas`, `POST /api/finanzas/metas/:id/aportes` y `DELETE /api/finanzas/metas/:id`.
-- [ ] `aporteMensualSugerido` = (objetivo − ahorrado) ÷ meses que faltan hasta `fechaLimite` (mínimo 1 mes). Si no hay fecha, `null`.
-- [ ] Un aporte negativo (retiro) no puede dejar `ahorrado` por debajo de 0.
-- [ ] Cada aporte queda en `auditoria` (Garavito agrega la acción en `src/auditoria.js`).
+- [x] Rutas `GET/POST /api/finanzas/metas`, `POST /api/finanzas/metas/:id/aportes` y `DELETE /api/finanzas/metas/:id`.
+- [x] `aporteMensualSugerido` = (objetivo − ahorrado) ÷ meses que faltan hasta `fechaLimite` (mínimo 1 mes). Si no hay fecha, `null`.
+- [x] Un aporte negativo (retiro) no puede dejar `ahorrado` por debajo de 0.
+- [x] Cada aporte queda en `auditoria` (Garavito agrega la acción en `src/auditoria.js`).
 
 **Listo cuando:** puedes crear una meta, aportar, retirar y ver el progreso.
 
 ### Sesión 3 · Pruebas y PR (viernes 6)
-- [ ] Escribe pruebas en `tests/finanzas.test.js`: crear un presupuesto, uno repetido (409), un límite inválido (400) y que otro usuario no pueda borrarlo (404). Lo mismo para una meta.
+- [x] Escribe pruebas en `tests/finanzas.test.js`: crear un presupuesto, uno repetido (409), un límite inválido (400) y que otro usuario no pueda borrarlo (404). Lo mismo para una meta.
 - [ ] Corre `npm test` con la rama `pruebas` de Neon.
 - [ ] Actualiza `docs/api.md` si algo cambió y abre el PR. Pide revisión a **Garavito**.
 
@@ -58,15 +60,15 @@ Estas tareas eran de las primeras semanas. Si alguna falta, hazla primero: bloqu
 
 ### Sesión 1 · Recuperar contraseña
 - [ ] Rama `feature/juanes-recuperar`. Necesitas: la tabla `tokens_recuperacion` (Garavito) y `enviarCorreoRecuperacion(email, nombre, enlace)` (Samu).
-- [ ] `POST /api/recuperar`: **siempre** responde `{ ok: true }`. Si el correo existe, crea un token con `crypto.randomBytes(32).toString('base64url')`, guarda solo `huella(token)` con vencimiento a 30 minutos y envía el enlace `https://<tu-app>/recuperar?token=...`.
-- [ ] `POST /api/recuperar/confirmar`: busca por `huella(token)`, revisa que no esté usado ni vencido, valida la contraseña nueva (mínimo 8), guarda el hash nuevo y marca el token como usado.
-- [ ] Límite: 3 solicitudes por correo cada hora (`crearLimitador`). Todo queda en `auditoria`.
+- [x] `POST /api/recuperar`: **siempre** responde `{ ok: true }`. Si el correo existe, crea un token con `crypto.randomBytes(32).toString('base64url')`, guarda solo `huella(token)` con vencimiento a 30 minutos y envía el enlace `https://<tu-app>/recuperar?token=...`.
+- [x] `POST /api/recuperar/confirmar`: busca por `huella(token)`, revisa que no esté usado ni vencido, valida la contraseña nueva (mínimo 8), guarda el hash nuevo y marca el token como usado.
+- [x] Límite: 3 solicitudes por correo cada hora (`crearLimitador`). Todo queda en `auditoria`.
 
 **Listo cuando:** el correo llega (en modo `consola` se ve en la terminal), el enlace funciona una sola vez y a los 30 minutos vence.
 **Pídele a Claude:** *"Implementa la recuperación de contraseña de docs/api.md §6 con las reglas de seguridad indicadas. Muéstrame cómo evita revelar si un correo existe."*
 
 ### Sesión 2 · Presupuestos en el resumen
-- [ ] En `src/finanzas/analisis.js`, si algún presupuesto está `excedido` o `cerca`, agrega una recomendación (tipo `alerta` o `atencion`).
+- [x] En `src/finanzas/analisis.js`, si algún presupuesto está `excedido` o `cerca`, agrega una recomendación (tipo `alerta` o `atencion`).
 - [ ] Prueba con un usuario que tenga un presupuesto excedido.
 
 ### Sesión 3 · Integración con las pantallas (viernes 13)
@@ -82,7 +84,7 @@ Estas tareas eran de las primeras semanas. Si alguna falta, hazla primero: bloqu
 
 ### Sesión 1 · Revisión final (lunes 16 es festivo; martes 17 congelamiento)
 - [ ] Recorre tus rutas con la [lista de seguridad](../seguridad-y-cumplimiento.md#lista-de-revisión-rápida-para-cada-pull-request) y corrige los issues con etiqueta `error`.
-- [ ] `docs/api.md` completo y fiel al código, con las rutas nuevas y ejemplos reales. Actualiza la colección de `docs/api/`.
+- [x] `docs/api.md` completo y fiel al código, con las rutas nuevas y ejemplos reales. Actualiza la colección de `docs/api/`.
 - [ ] Ayuda a Samu con las notas de la versión `v1.0`.
 
 ### Sesión 2 · Tu parte de la presentación
@@ -93,4 +95,4 @@ Estas tareas eran de las primeras semanas. Si alguna falta, hazla primero: bloqu
 ---
 
 ## Si sobra tiempo (prioridad 3)
-- **Cerrar sesiones al cambiar la contraseña:** columna `usuarios.version_sesion` (Garavito), incluir `version` en el token de sesión en `src/seguridad.js` y rechazar versiones viejas en `src/sesion.js` (avísale a Samu: son sus archivos). Al confirmar la contraseña nueva, suma 1 a `version_sesion`.
+- ✅ (hecho el 17 nov) **Cerrar sesiones al cambiar la contraseña:** columna `usuarios.version_sesion` (Garavito), incluir `version` en el token de sesión en `src/seguridad.js` y rechazar versiones viejas en `src/sesion.js` (avísale a Samu: son sus archivos). Al confirmar la contraseña nueva, suma 1 a `version_sesion`.

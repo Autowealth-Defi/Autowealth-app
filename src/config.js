@@ -21,6 +21,11 @@ const config = {
   // esto permite saber la IP real del visitante para limitar intentos.
   confiarEnProxy: esProduccion || env.TRUST_PROXY === '1',
 
+  // Dirección pública de la app (ej. https://autowealth.onrender.com), sin "/" al final.
+  // Con ella se arman los enlaces de los correos. Nunca se usa la cabecera "Host" de la
+  // petición: un atacante podría cambiarla para que el enlace apunte a su propio sitio.
+  appUrl: (env.APP_URL || (esProduccion ? '' : `http://localhost:${Number(env.PORT) || 3000}`)).trim().replace(/\/+$/, ''),
+
   databaseUrl: env.DATABASE_URL,
   sessionSecret: env.SESSION_SECRET,
   surveyUrl: env.SURVEY_URL || 'https://forms.gle/q7PYdBcBk3SMQzUPA',
@@ -59,6 +64,11 @@ if (!config.databaseUrl || config.databaseUrl.includes('usuario:contraseña@ep-x
 }
 if (!config.sessionSecret || config.sessionSecret.length < 32 || config.sessionSecret.startsWith('cambia-esto')) {
   errores.push('SESSION_SECRET: pon una clave aleatoria de al menos 32 caracteres.');
+}
+// APP_URL es opcional para que el servidor arranque aunque falte; sin ella solo falla
+// el correo de recuperación, con un mensaje claro en los Logs.
+if (config.appUrl && !/^https?:\/\/[a-z0-9.-]+(:\d+)?$/i.test(config.appUrl)) {
+  errores.push('APP_URL: pon solo la dirección de la app, por ejemplo https://autowealth.onrender.com (sin rutas ni "/" al final).');
 }
 if (!['consola', 'gmail', 'brevo'].includes(config.correo.proveedor)) {
   errores.push('EMAIL_PROVIDER: debe ser "consola", "gmail" o "brevo".');

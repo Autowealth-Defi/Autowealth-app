@@ -29,7 +29,7 @@ async function crearUsuario({ nombre, email, telefono, cedula, passwordHash }) {
   const { rows } = await pool.query(
     `INSERT INTO usuarios (nombre, email, telefono, cedula, password_hash, acepta_datos, acepta_datos_en)
      VALUES ($1, $2, $3, $4, $5, true, now())
-     RETURNING id, nombre, email`,
+     RETURNING id, nombre, email, version_sesion`,
     [nombre, email, telefono, cedula, passwordHash]
   );
   return rows[0];
@@ -37,14 +37,14 @@ async function crearUsuario({ nombre, email, telefono, cedula, passwordHash }) {
 
 async function buscarUsuarioPorEmail(email) {
   const { rows } = await pool.query(
-    'SELECT id, nombre, email, password_hash FROM usuarios WHERE email = $1',
+    'SELECT id, nombre, email, password_hash, version_sesion FROM usuarios WHERE email = $1',
     [email]
   );
   return rows[0] || null;
 }
 
 async function buscarUsuarioPorId(id) {
-  const { rows } = await pool.query('SELECT id, nombre, email FROM usuarios WHERE id = $1', [id]);
+  const { rows } = await pool.query('SELECT id, nombre, email, version_sesion FROM usuarios WHERE id = $1', [id]);
   return rows[0] || null;
 }
 
@@ -138,6 +138,18 @@ async function buscarTokenRecuperacion(tokenHash) {
   return rows[0] || null;
 }
 
+// Gasta el token en UNA sola operación: si dos peticiones llegan al mismo tiempo con el
+// mismo enlace, solo una lo consigue. Devuelve { id, usuario_id } o null si no sirve.
+async function consumirTokenRecuperacion(tokenHash) {
+  const { rows } = await pool.query(
+    `UPDATE tokens_recuperacion SET usado_en = now()
+      WHERE token_hash = $1 AND usado_en IS NULL AND expira_en > now()
+      RETURNING id, usuario_id`,
+    [tokenHash]
+  );
+  return rows[0] || null;
+}
+
 async function marcarTokenUsado(id) {
   await pool.query('UPDATE tokens_recuperacion SET usado_en = now() WHERE id = $1', [id]);
 }
@@ -157,5 +169,5 @@ module.exports = {
   inicializar, crearUsuario, buscarUsuarioPorEmail, buscarUsuarioPorId,
   marcarCorreoEnviado, marcarCorreoFallido, registrarIngreso,
   listarUsuarios, listarIngresos, verificarConexion, cerrar,
- crearTokenRecuperacion, buscarTokenRecuperacion, marcarTokenUsado, cambiarPassword,
+ crearTokenRecuperacion, buscarTokenRecuperacion, marcarTokenUsado, consumirTokenRecuperacion, cambiarPassword,
 };

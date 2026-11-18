@@ -1,59 +1,64 @@
+// =====================================================================
+//  recuperar.js — Página /recuperar?token=... (enlace del correo).
+//  Pide la contraseña nueva dos veces y la envía a POST /api/recuperar/confirmar.
+//  El token no se guarda en ningún lado: se lee de la URL y se quita de la barra
+//  de direcciones para que no quede en el historial del navegador.
+// =====================================================================
 (function () {
   'use strict';
 
-  const params = new URLSearchParams(window.location.search);
-  const token = params.get('token') || '';
-  // Conserva el token solo en memoria y lo quita de la barra de direcciones e historial.
-  window.history.replaceState(null, document.title, window.location.pathname);
+  // Mismo tema (claro u oscuro) que el resto de la app
+  try {
+    const tema = localStorage.getItem('theme') || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+    document.documentElement.setAttribute('data-theme', tema);
+  } catch (e) { /* sin localStorage: queda el tema claro */ }
 
-  const form = document.getElementById('formRecuperar');
-  const password = document.getElementById('password');
-  const confirmacion = document.getElementById('confirmacion');
-  const button = document.getElementById('enviar');
-  const mensaje = document.getElementById('mensaje');
+  const $ = (sel) => document.querySelector(sel);
+  const token = new URLSearchParams(location.search).get('token') || '';
+  try { history.replaceState(null, '', location.pathname); } catch (e) { /* no pasa nada */ }
 
-  function mostrar(texto, error) {
-    mensaje.textContent = texto;
-    mensaje.classList.toggle('error', Boolean(error));
+  if (!/^[A-Za-z0-9_-]{20,200}$/.test(token)) {
+    $('#sinToken').hidden = false;
+    return;
+  }
+  $('#formulario').hidden = false;
+  $('#clave').focus();
+
+  $('#mostrar').addEventListener('change', (e) => {
+    const tipo = e.target.checked ? 'text' : 'password';
+    $('#clave').type = tipo; $('#clave2').type = tipo;
+  });
+
+  function mostrarError(texto) {
+    const m = $('#mensaje');
+    m.textContent = texto; // textContent: nunca se interpreta como HTML
+    m.hidden = false;
   }
 
-  if (!token) {
-    form.hidden = true;
-    mostrar('El enlace no es válido o ya no está disponible. Solicita uno nuevo desde el inicio de sesión.', true);
-  }
+  $('#formulario').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    $('#mensaje').hidden = true;
+    const password = $('#clave').value;
+    if (password.length < 8) return mostrarError('La contraseña debe tener al menos 8 caracteres.');
+    if (password.length > 128) return mostrarError('La contraseña es demasiado larga.');
+    if (password !== $('#clave2').value) return mostrarError('Las contraseñas no coinciden.');
 
-  form.addEventListener('submit', async function (event) {
-    event.preventDefault();
-    mostrar('', false);
-
-    if (password.value.length < 8) {
-      mostrar('La contraseña debe tener al menos 8 caracteres.', true);
-      password.focus();
-      return;
-    }
-    if (password.value !== confirmacion.value) {
-      mostrar('Las contraseñas no coinciden.', true);
-      confirmacion.focus();
-      return;
-    }
-    if (!token) return;
-
-    button.disabled = true;
+    const boton = $('#guardar');
+    boton.disabled = true; boton.textContent = 'Guardando…';
     try {
-      const response = await fetch('/api/recuperar/confirmar', {
-        method: 'POST',
+      const res = await fetch('/api/recuperar/confirmar', {
+        method: 'POST', credentials: 'same-origin',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ token, password: password.value }),
-        cache: 'no-store',
-        credentials: 'same-origin',
+        body: JSON.stringify({ token, password }),
       });
-      if (!response.ok) throw new Error('enlace inválido o vencido');
-      mostrar('Listo, ya puedes iniciar sesión.', false);
-      form.hidden = true;
-    } catch {
-      mostrar('No se pudo cambiar la contraseña. El enlace puede haber vencido o ya haberse usado. Solicita uno nuevo desde el inicio de sesión.', true);
-    } finally {
-      button.disabled = false;
+      const datos = await res.json().catch(() => ({ ok: false, error: 'Respuesta inesperada del servidor.' }));
+      if (!datos.ok) throw new Error(datos.error || 'No se pudo cambiar la contraseña.');
+      $('#formulario').hidden = true;
+      $('#listo').hidden = false;
+      $('#listo a').focus();
+    } catch (err) {
+      mostrarError(err.message === 'Failed to fetch' ? 'No hay conexión con el servidor. Revisa tu internet.' : err.message);
+      boton.disabled = false; boton.textContent = 'Guardar contraseña nueva';
     }
   });
 })();

@@ -305,55 +305,13 @@ async function listarPagosBancoDemo(usuarioId, institucion) {
   return rows;
 }
 
-// -------------------------------- PRESUPUESTOS --------------------------------
-
-// Presupuestos del usuario con lo GASTADO en cada categoría entre "desde" y "hasta" (un mes).
-// Gastado = suma de los gastos (monto < 0) de esa categoría, en positivo. Las devoluciones
-// (montos positivos) no restan, igual que en el resumen (analisis.js → porCategoria).
-async function listarPresupuestos(usuarioId, desde, hasta) {
-  const { rows } = await pool.query(
-    `SELECT p.id, p.categoria, p.limite::float8 AS limite,
-            COALESCE(SUM(-m.monto) FILTER (WHERE m.monto < 0), 0)::float8 AS gastado
-       FROM presupuestos p
-       LEFT JOIN movimientos m
-         ON m.usuario_id = p.usuario_id AND m.categoria = p.categoria
-        AND m.fecha >= $2::date AND m.fecha <= $3::date
-      WHERE p.usuario_id = $1
-      GROUP BY p.id
-      ORDER BY p.categoria`,
-    [usuarioId, desde, hasta]);
-  return rows;
-}
-
-// Devuelve el id nuevo, o null si el usuario YA tiene un presupuesto para esa categoría.
-// ON CONFLICT evita el error aunque dos peticiones lleguen al mismo tiempo.
-async function crearPresupuesto(usuarioId, categoria, limite) {
-  const { rows } = await pool.query(
-    `INSERT INTO presupuestos (usuario_id, categoria, limite) VALUES ($1, $2, $3)
-     ON CONFLICT ON CONSTRAINT presupuestos_unico DO NOTHING
-     RETURNING id`,
-    [usuarioId, categoria, limite]);
-  return rows[0] ? rows[0].id : null;
-}
-
-// true si se cambió; false si no existe o no es de este usuario (→ 404)
-async function actualizarPresupuesto(usuarioId, id, limite) {
-  const { rows } = await pool.query(
-    'UPDATE presupuestos SET limite = $3 WHERE usuario_id = $1 AND id = $2 RETURNING id', [usuarioId, id, limite]);
-  return rows.length > 0;
-}
-
-async function eliminarPresupuesto(usuarioId, id) {
-  const { rows } = await pool.query('DELETE FROM presupuestos WHERE usuario_id = $1 AND id = $2 RETURNING id', [usuarioId, id]);
-  return rows.length > 0;
-}
-
-// Borra cuentas, movimientos, conexiones, deudas, presupuestos y solicitudes de pago
+// Borra cuentas, movimientos, conexiones, deudas, presupuestos, metas y solicitudes de pago
 // (los consentimientos quedan como historial, revocados)
 async function borrarFinanzas(usuarioId) {
   await pool.query('DELETE FROM redirecciones WHERE usuario_id = $1', [usuarioId]);
   await pool.query('DELETE FROM deudas WHERE usuario_id = $1', [usuarioId]);
   await pool.query('DELETE FROM presupuestos WHERE usuario_id = $1', [usuarioId]);
+  await pool.query('DELETE FROM metas WHERE usuario_id = $1', [usuarioId]); // sus aportes se borran en cascada
   await pool.query('DELETE FROM cuentas WHERE usuario_id = $1', [usuarioId]);
   await pool.query('DELETE FROM conexiones WHERE usuario_id = $1', [usuarioId]);
   await pool.query(
@@ -400,21 +358,87 @@ async function eliminarPresupuesto(usuarioId, id) {
   return rows.length > 0;
 }
 
+// Presupuestos VIGENTES en un mes, con lo gastado en ese mes.
+// Un presupuesto no hay que crearlo otra vez cada mes: sigue valiendo hasta que se borre,
+// y también se usa para revisar meses anteriores. Para cada categoría se toma la fila
+// más reciente con mes <= el mes pedido; si no hay, la más antigua de las siguientes.
+// Gastado = suma de los gastos (monto < 0) de esa categoría en el mes, en positivo.
+// Las devoluciones (montos positivos) no restan, igual que en el resumen.
+async function listarPresupuestosVigentes(usuarioId, mes, desde, hasta) {
+  const { rows } = await pool.query(
+    `WITH vigentes AS (
+       SELECT DISTINCT ON (categoria) id, categoria, limite
+         FROM presupuestos
+        WHERE usuario_id = $1
+        ORDER BY categoria, (mes <= $2) DESC, CASE WHEN mes <= $2 THEN mes END DESC, mes
+     )
+     SELECT v.id, v.categoria, v.limite::float8 AS limite,
+            COALESCE(SUM(-m.monto) FILTER (WHERE m.monto < 0), 0)::float8 AS gastado
+       FROM vigentes v
+       LEFT JOIN movimientos m
+              ON m.usuario_id = $1 AND m.categoria = v.categoria
+             AND m.fecha >= $3::date AND m.fecha <= $4::date
+      GROUP BY v.id, v.categoria, v.limite
+      ORDER BY v.categoria`,
+    [usuarioId, mes, desde, hasta]
+  );
+  return rows;
+}
+
+// Crea un presupuesto en el mes dado. Devuelve el id, o null si ya existe uno igual.
+// ON CONFLICT DO NOTHING (sin nombrar columnas) funciona con las dos versiones de la
+// restricción presupuestos_unico que puede tener la base de datos.
+async function insertarPresupuesto(usuarioId, mes, categoria, limite) {
+  const { rows } = await pool.query(
+    `INSERT INTO presupuestos (usuario_id, mes, categoria, limite) VALUES ($1, $2, $3, $4)
+     ON CONFLICT DO NOTHING RETURNING id`,
+    [usuarioId, mes, categoria, limite]
+  );
+  return rows[0] ? rows[0].id : null;
+}
+
+async function obtenerPresupuesto(usuarioId, id) {
+  const { rows } = await pool.query(
+    'SELECT id, mes, categoria, limite::float8 AS limite FROM presupuestos WHERE usuario_id = $1 AND id = $2',
+    [usuarioId, id]
+  );
+  return rows[0] || null;
+}
+
+async function actualizarPresupuesto(usuarioId, id, limite) {
+  const { rows } = await pool.query(
+    'UPDATE presupuestos SET limite = $3 WHERE usuario_id = $1 AND id = $2 RETURNING id',
+    [usuarioId, id, limite]
+  );
+  return rows.length > 0;
+}
+
+// Borra el presupuesto de una categoría en TODOS los meses (si solo se borrara una
+// fila, volvería a aparecer la de un mes anterior). Devuelve cuántas filas borró.
+async function eliminarPresupuestoCategoria(usuarioId, categoria) {
+  const { rowCount } = await pool.query(
+    'DELETE FROM presupuestos WHERE usuario_id = $1 AND categoria = $2',
+    [usuarioId, categoria]
+  );
+  return rowCount;
+}
+
 // -------------------------------- METAS ---------------------------------
 
+// m.nombreCifrado: el nombre ya cifrado. La columna "nombre" (en claro) queda vacía.
 async function crearMeta(m) {
   const { rows } = await pool.query(
-    `INSERT INTO metas (usuario_id, nombre, objetivo, plazo)
-     VALUES ($1, $2, $3, $4) RETURNING id`,
-    [m.usuarioId, m.nombre, m.objetivo, m.plazo]
+    `INSERT INTO metas (usuario_id, nombre, nombre_cifrado, objetivo, plazo, sin_fecha)
+     VALUES ($1, '', $2, $3, $4, $5) RETURNING id`,
+    [m.usuarioId, m.nombreCifrado, m.objetivo, m.plazo, Boolean(m.sinFecha)]
   );
   return rows[0].id;
 }
 
 async function listarMetas(usuarioId) {
   const { rows } = await pool.query(
-    `SELECT mt.id, mt.nombre, mt.objetivo::float8 AS objetivo, mt.plazo,
-            COALESCE(SUM(a.monto), 0)::float8 AS aportado
+    `SELECT mt.id, mt.nombre, mt.nombre_cifrado, mt.sin_fecha, mt.objetivo::float8 AS objetivo, to_char(mt.plazo, 'YYYY-MM-DD') AS plazo,
+            COALESCE(SUM(CASE WHEN a.tipo = 'retiro' THEN -a.monto ELSE a.monto END), 0)::float8 AS aportado
        FROM metas mt
        LEFT JOIN aportes_meta a ON a.meta_id = mt.id
       WHERE mt.usuario_id = $1
@@ -427,8 +451,8 @@ async function listarMetas(usuarioId) {
 
 async function obtenerMeta(usuarioId, id) {
   const { rows } = await pool.query(
-    `SELECT mt.id, mt.nombre, mt.objetivo::float8 AS objetivo, mt.plazo,
-            COALESCE(SUM(a.monto), 0)::float8 AS aportado
+    `SELECT mt.id, mt.nombre, mt.nombre_cifrado, mt.sin_fecha, mt.objetivo::float8 AS objetivo, to_char(mt.plazo, 'YYYY-MM-DD') AS plazo,
+            COALESCE(SUM(CASE WHEN a.tipo = 'retiro' THEN -a.monto ELSE a.monto END), 0)::float8 AS aportado
        FROM metas mt
        LEFT JOIN aportes_meta a ON a.meta_id = mt.id
       WHERE mt.usuario_id = $1 AND mt.id = $2
@@ -459,13 +483,23 @@ async function eliminarMeta(usuarioId, id) {
   return rows.length > 0;
 }
 
-async function aportarMeta(usuarioId, metaId, monto, nota = '') {
+// Registra un aporte (tipo 'aporte') o un retiro (tipo 'retiro'). "monto" siempre positivo.
+// La consulta vuelve a revisar que la meta sea del usuario, aunque la ruta ya lo hizo.
+async function aportarMeta(usuarioId, metaId, monto, { tipo = 'aporte', fecha = null, nota = '' } = {}) {
   const { rows } = await pool.query(
-    `INSERT INTO aportes_meta (usuario_id, meta_id, monto, nota)
-     VALUES ($1, $2, $3, $4) RETURNING id`,
-    [usuarioId, metaId, monto, nota]
+    `INSERT INTO aportes_meta (usuario_id, meta_id, monto, nota, tipo, fecha)
+     SELECT $1, mt.id, $3, $4, $5, COALESCE($6::date, CURRENT_DATE)
+       FROM metas mt WHERE mt.id = $2 AND mt.usuario_id = $1
+     RETURNING id`,
+    [usuarioId, metaId, monto, nota, tipo, fecha]
   );
-  return rows[0].id;
+  return rows[0] ? rows[0].id : null;
+}
+
+// Cuenta las metas del usuario (para poner un tope)
+async function contarMetas(usuarioId) {
+  const { rows } = await pool.query('SELECT count(*)::int AS n FROM metas WHERE usuario_id = $1', [usuarioId]);
+  return rows[0].n;
 }
 
 module.exports = {
@@ -476,5 +510,7 @@ module.exports = {
   listarDeudas, obtenerDeuda, contarDeudas, crearDeuda, actualizarDeuda, eliminarDeuda, abonarDeuda,
   obtenerCuentaParaPago, crearRedireccion, buscarRedireccionPorState, cerrarRedireccion, montoPendiente, listarRedirecciones,
   registrarPagoBancoDemo, listarPagosBancoDemo,
-  listarPresupuestos, crearPresupuesto, actualizarPresupuesto, eliminarPresupuesto,
+  crearPresupuesto, listarPresupuestos, eliminarPresupuesto,
+  listarPresupuestosVigentes, insertarPresupuesto, obtenerPresupuesto, actualizarPresupuesto, eliminarPresupuestoCategoria,
+  crearMeta, listarMetas, obtenerMeta, actualizarMeta, eliminarMeta, aportarMeta, contarMetas,
 };

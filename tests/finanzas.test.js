@@ -1,9 +1,10 @@
 // =====================================================================
-//  tests/finanzas.test.js — Pruebas de los presupuestos por categoría.
+//  tests/finanzas.test.js — Pruebas de presupuestos por categoría y metas de ahorro.
 //
-//  1) "estadoPresupuesto": la cuenta de bien / cerca / excedido. Es una función
-//     pura (no usa la base de datos), así que estas pruebas corren SIEMPRE.
-//  2) Las rutas /api/finanzas/presupuestos: arrancan el servidor de verdad contra
+//  1) "estadoPresupuesto" y "estadoMeta": las cuentas de bien / cerca / excedido y
+//     del aporte mensual sugerido. Son funciones puras (no usan la base de datos),
+//     así que estas pruebas corren SIEMPRE.
+//  2) Las rutas /api/finanzas/presupuestos y /api/finanzas/metas: arrancan el servidor de verdad contra
 //     una base de datos de PRUEBAS (igual que tests/api.test.js). Necesitan
 //     TEST_DATABASE_URL; sin ella se saltan.
 //  ⚠️ Nunca uses la base de datos de producción: las pruebas crean usuarios.
@@ -13,10 +14,10 @@ const assert = require('node:assert/strict');
 const { spawn } = require('node:child_process');
 const crypto = require('node:crypto');
 const path = require('node:path');
-const { estadoPresupuesto } = require('../src/finanzas/analisis');
+const { estadoPresupuesto, estadoMeta, mesesHasta } = require('../src/finanzas/analisis');
 
 const DB = process.env.TEST_DATABASE_URL;
-const PUERTO = 4100 + Math.floor(Math.random() * 90); // distinto de api.test.js y deudas.test.js
+const PUERTO = 4100 + Math.floor(Math.random() * 90); // distinto de api.test.js, deudas.test.js y recuperar.test.js
 const B = `http://localhost:${PUERTO}`;
 const CLAVE = 'clave-segura-1';
 let servidor;
@@ -92,6 +93,28 @@ describe('estadoPresupuesto (bien / cerca / excedido)', () => {
     assert.equal(r.estado, 'excedido');
     assert.equal(r.porcentaje, 130);
     assert.equal(r.disponible, -30_000);
+  });
+});
+
+describe('estadoMeta (progreso y aporte mensual sugerido)', () => {
+  test('lo que falta ÷ meses que quedan, redondeado hacia arriba', () => {
+    const r = estadoMeta({ objetivo: 3_000_000, aportado: 1_200_000, plazo: '2027-05-17' }, '2026-11-17');
+    assert.deepEqual(r, { ahorrado: 1_200_000, falta: 1_800_000, porcentaje: 40, cumplida: false, aporteMensualSugerido: 300_000 });
+    assert.equal(estadoMeta({ objetivo: 1_000_000, aportado: 0, plazo: '2027-02-17' }, '2026-11-17').aporteMensualSugerido, 333_334);
+  });
+
+  test('meses que faltan: mínimo 1, y un mes incompleto no cuenta', () => {
+    assert.equal(mesesHasta('2026-12-10', '2026-11-10'), 1);
+    assert.equal(mesesHasta('2026-12-10', '2026-11-20'), 1, 'menos de un mes → 1 (mínimo)');
+    assert.equal(mesesHasta('2027-06-09', '2026-11-10'), 6);
+    assert.equal(mesesHasta('2026-01-01', '2026-11-17'), 1, 'fecha ya pasada → pide todo lo que falta de una vez');
+  });
+
+  test('meta cumplida: aporte sugerido 0 y porcentaje que puede pasar de 100', () => {
+    const r = estadoMeta({ objetivo: 400_000, aportado: 450_000, plazo: '2027-01-01' }, '2026-11-17');
+    assert.equal(r.cumplida, true);
+    assert.equal(r.aporteMensualSugerido, 0);
+    assert.equal(r.porcentaje, 113);
   });
 });
 
@@ -252,5 +275,134 @@ describe('Presupuestos por categoría', { skip: !DB && 'Define TEST_DATABASE_URL
     assert.equal((await c.pedir('/api/finanzas/presupuestos/1', { method: 'DELETE' })).estado, 401);
     const otroSitio = await c.pedir('/api/finanzas/presupuestos', { method: 'POST', body: { categoria: 'Mercado', limite: 1 }, headers: { Origin: 'https://sitio-malicioso.example' } });
     assert.equal(otroSitio.estado, 403);
+  });
+});
+
+describe('Metas de ahorro', { skip: !DB && 'Define TEST_DATABASE_URL para correr las pruebas' }, () => {
+  const enMeses = (n) => { const d = new Date(); d.setUTCMonth(d.getUTCMonth() + n); return d.toISOString().slice(0, 10); };
+
+  test('crear (201), listar con progreso, aportar, retirar y borrar', async () => {
+    const c = cliente();
+    await registrar(c);
+    const creada = await c.pedir('/api/finanzas/metas', { method: 'POST', body: { nombre: 'Viaje a Cartagena', objetivo: 3_000_000, fechaLimite: enMeses(6) } });
+    assert.equal(creada.estado, 201, JSON.stringify(creada.datos));
+    const { id } = creada.datos;
+
+    let meta = (await c.pedir('/api/finanzas/metas')).datos.metas[0];
+    assert.equal(meta.nombre, 'Viaje a Cartagena', 'el nombre se descifra al leerlo');
+    assert.equal(meta.ahorrado, 0);
+    assert.equal(meta.fechaLimite, enMeses(6));
+    assert.equal(meta.aporteMensualSugerido, 500_000);
+
+    const aporte = await c.pedir(`/api/finanzas/metas/${id}/aportes`, { method: 'POST', body: { valor: 1_200_000, fecha: hoy() } });
+    assert.equal(aporte.estado, 201, JSON.stringify(aporte.datos));
+    assert.equal(aporte.datos.ahorrado, 1_200_000);
+
+    const retiro = await c.pedir(`/api/finanzas/metas/${id}/aportes`, { method: 'POST', body: { valor: -200_000 } });
+    assert.equal(retiro.estado, 201);
+    assert.equal(retiro.datos.ahorrado, 1_000_000);
+
+    meta = (await c.pedir('/api/finanzas/metas')).datos.metas[0];
+    assert.equal(meta.ahorrado, 1_000_000);
+    assert.equal(meta.porcentaje, 33);
+    assert.equal(meta.aporteMensualSugerido, Math.ceil(2_000_000 / 6));
+
+    assert.equal((await c.pedir(`/api/finanzas/metas/${id}`, { method: 'DELETE' })).estado, 200);
+    assert.equal((await c.pedir(`/api/finanzas/metas/${id}`, { method: 'DELETE' })).estado, 404);
+    assert.equal((await c.pedir('/api/finanzas/metas')).datos.metas.length, 0);
+  });
+
+  test('sin fecha límite: se puede crear, y no hay aporte sugerido', async () => {
+    const c = cliente();
+    await registrar(c);
+    const nombre = 'Portátil nuevo 💻 para la universidad, con todo y estuche';
+    const r = await c.pedir('/api/finanzas/metas', { method: 'POST', body: { nombre, objetivo: 2_500_000, fechaLimite: null } });
+    assert.equal(r.estado, 201, JSON.stringify(r.datos));
+    const meta = (await c.pedir('/api/finanzas/metas')).datos.metas[0];
+    assert.equal(meta.nombre, nombre, 'nombre largo con emoji: se cifra y se lee completo');
+    assert.equal(meta.fechaLimite, null);
+    assert.equal(meta.aporteMensualSugerido, null);
+  });
+
+  test('un retiro no puede dejar la meta en negativo', async () => {
+    const c = cliente();
+    await registrar(c);
+    const { id } = (await c.pedir('/api/finanzas/metas', { method: 'POST', body: { nombre: 'Portátil', objetivo: 2_500_000, fechaLimite: enMeses(3) } })).datos;
+    await c.pedir(`/api/finanzas/metas/${id}/aportes`, { method: 'POST', body: { valor: 100_000 } });
+    const r = await c.pedir(`/api/finanzas/metas/${id}/aportes`, { method: 'POST', body: { valor: -150_000 } });
+    assert.equal(r.estado, 400);
+    assert.match(r.datos.error, /100\.000/);
+    assert.equal((await c.pedir('/api/finanzas/metas')).datos.metas[0].ahorrado, 100_000);
+  });
+
+  test('validaciones (400)', async () => {
+    const c = cliente();
+    await registrar(c);
+    const crear = (body) => c.pedir('/api/finanzas/metas', { method: 'POST', body });
+    const base = { nombre: 'Meta', objetivo: 100_000, fechaLimite: enMeses(2) };
+    assert.equal((await crear({ ...base, nombre: '' })).estado, 400);
+    assert.equal((await crear({ ...base, nombre: 'x'.repeat(61) })).estado, 400, 'máximo 60 caracteres');
+    assert.equal((await crear({ ...base, objetivo: 0 })).estado, 400);
+    assert.equal((await crear({ ...base, objetivo: 10_000_000_000 })).estado, 400);
+
+    assert.equal((await crear({ ...base, fechaLimite: '2020-01-01' })).estado, 400, 'no puede estar en el pasado');
+    assert.equal((await crear({ ...base, fechaLimite: '2027-02-30' })).estado, 400, 'fecha que no existe');
+    assert.equal((await crear(base)).estado, 201);
+
+    const { id } = (await c.pedir('/api/finanzas/metas')).datos.metas[0];
+    for (const valor of [0, 'mucho', null, true, 10_000_000_000]) {
+      assert.equal((await c.pedir(`/api/finanzas/metas/${id}/aportes`, { method: 'POST', body: { valor } })).estado, 400, `valor = ${JSON.stringify(valor)}`);
+    }
+    const manana = new Date(Date.now() + 3 * 86_400_000).toISOString().slice(0, 10);
+    assert.equal((await c.pedir(`/api/finanzas/metas/${id}/aportes`, { method: 'POST', body: { valor: 1_000, fecha: manana } })).estado, 400, 'aporte con fecha futura');
+  });
+
+  test('otro usuario no puede verlas, aportarles ni borrarlas (404)', async () => {
+    const a = cliente();
+    const b = cliente();
+    await registrar(a);
+    await registrar(b);
+    const { id } = (await a.pedir('/api/finanzas/metas', { method: 'POST', body: { nombre: 'Matrícula', objetivo: 1_800_000, fechaLimite: enMeses(4) } })).datos;
+    assert.equal((await b.pedir('/api/finanzas/metas')).datos.metas.length, 0);
+    assert.equal((await b.pedir(`/api/finanzas/metas/${id}/aportes`, { method: 'POST', body: { valor: 5_000 } })).estado, 404);
+    assert.equal((await b.pedir(`/api/finanzas/metas/${id}`, { method: 'DELETE' })).estado, 404);
+    assert.equal((await a.pedir('/api/finanzas/metas')).datos.metas[0].ahorrado, 0, 'el intento de B no cambió nada');
+  });
+
+  test('quedan en la auditoría, se exportan y se borran con "borrar mi información financiera"', async () => {
+    const c = cliente();
+    await registrar(c);
+    const { id } = (await c.pedir('/api/finanzas/metas', { method: 'POST', body: { nombre: 'Regalo', objetivo: 400_000, fechaLimite: enMeses(1) } })).datos;
+    await c.pedir(`/api/finanzas/metas/${id}/aportes`, { method: 'POST', body: { valor: 50_000 } });
+    const acciones = (await c.pedir('/api/privacidad')).datos.historial.map((h) => h.accion);
+    assert.ok(acciones.includes('meta_creada') && acciones.includes('aporte_meta'));
+    const exportado = (await c.pedir('/api/privacidad/exportar')).datos;
+    assert.equal(exportado.metas[0].nombre, 'Regalo');
+    assert.equal((await c.pedir('/api/privacidad/borrar-finanzas', { method: 'POST', body: { password: CLAVE } })).estado, 200);
+    assert.equal((await c.pedir('/api/finanzas/metas')).datos.metas.length, 0);
+  });
+
+  test('exigen sesión (401)', async () => {
+    const c = cliente();
+    assert.equal((await c.pedir('/api/finanzas/metas')).estado, 401);
+    assert.equal((await c.pedir('/api/finanzas/metas', { method: 'POST', body: {} })).estado, 401);
+    assert.equal((await c.pedir('/api/finanzas/metas/1/aportes', { method: 'POST', body: { valor: 1 } })).estado, 401);
+    assert.equal((await c.pedir('/api/finanzas/metas/1', { method: 'DELETE' })).estado, 401);
+  });
+});
+
+describe('Presupuestos en el resumen', { skip: !DB && 'Define TEST_DATABASE_URL para correr las pruebas' }, () => {
+  test('un presupuesto excedido o cerca aparece en las recomendaciones', async () => {
+    const c = cliente();
+    await registrar(c);
+    await c.pedir('/api/finanzas/presupuestos', { method: 'POST', body: { categoria: 'Mercado', limite: 100_000 } });
+    await c.pedir('/api/finanzas/presupuestos', { method: 'POST', body: { categoria: 'Transporte', limite: 100_000 } });
+    await gastar(c, 'Mercado', 130_000, hoy());
+    await gastar(c, 'Transporte', 90_000, hoy());
+    const r = (await c.pedir(`/api/finanzas/resumen?mes=${mesActual()}`)).datos;
+    const alerta = r.recomendaciones.find((x) => x.tipo === 'alerta' && x.texto.includes('Mercado'));
+    const atencion = r.recomendaciones.find((x) => x.tipo === 'atencion' && x.texto.includes('Transporte'));
+    assert.ok(alerta, JSON.stringify(r.recomendaciones));
+    assert.ok(atencion, JSON.stringify(r.recomendaciones));
   });
 });

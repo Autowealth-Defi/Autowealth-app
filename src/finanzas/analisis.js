@@ -65,8 +65,10 @@ function formatoPesos(v) {
   return '$' + Math.round(v).toLocaleString('es-CO');
 }
 
-function recomendaciones({ actual, suscripciones, hormiga, mesesFondo, tasaAhorro, porCategoria, hayDatos }) {
+function recomendaciones({ actual, suscripciones, hormiga, mesesFondo, tasaAhorro, porCategoria, hayDatos, presupuestos = [] }) {
   const lista = [];
+  // Presupuestos primero: son límites que la persona misma se puso
+  lista.push(...avisosPresupuestos(presupuestos));
   if (!hayDatos) {
     lista.push({ tipo: 'info', texto: 'Conecta un banco o registra tus movimientos para ver recomendaciones personalizadas.' });
     return lista;
@@ -174,7 +176,7 @@ function planDineroOcioso({ movimientos, cuentas, deudas, mes, pendiente = 0 }) 
 }
 
 // Arma todo el resumen del panel para un mes ("YYYY-MM")
-function resumen({ movimientos, cuentas, mes }) {
+function resumen({ movimientos, cuentas, mes, presupuestos = [] }) {
   const ventana6 = mesesAtras(mes, 6);
   const delMes = movimientos.filter((m) => mesDe(m.fecha) === mes);
   const actual = totales(delMes);
@@ -214,7 +216,7 @@ function resumen({ movimientos, cuentas, mes }) {
     porCategoria,
     suscripciones,
     hormiga,
-    recomendaciones: recomendaciones({ actual, suscripciones, hormiga, mesesFondo, tasaAhorro, porCategoria, hayDatos: movimientos.length > 0 }),
+    recomendaciones: recomendaciones({ actual, suscripciones, hormiga, mesesFondo, tasaAhorro, porCategoria, hayDatos: movimientos.length > 0, presupuestos }),
   };
 }
 
@@ -241,4 +243,42 @@ function estadoPresupuesto(gastado, limite) {
   };
 }
 
-module.exports = { resumen, mesesAtras, planDineroOcioso, estadoPresupuesto, MESES_RESERVA, CUENTAS_PARA_PAGAR };
+// Recomendaciones del resumen para los presupuestos excedidos (alerta) o cerca (atención).
+// Recibe presupuestos ya calculados con estadoPresupuesto: { categoria, limite, gastado, estado }.
+function avisosPresupuestos(presupuestos) {
+  const lista = [];
+  for (const p of presupuestos.filter((x) => x.estado === 'excedido')) {
+    lista.push({ tipo: 'alerta', texto: `Te pasaste del presupuesto de "${p.categoria}": llevas ${formatoPesos(p.gastado)} de ${formatoPesos(p.limite)} (${formatoPesos(p.gastado - p.limite)} de más).` });
+  }
+  for (const p of presupuestos.filter((x) => x.estado === 'cerca')) {
+    lista.push({ tipo: 'atencion', texto: `Vas en el ${p.porcentaje}% del presupuesto de "${p.categoria}": te quedan ${formatoPesos(p.limite - p.gastado)} para el resto del mes.` });
+  }
+  return lista;
+}
+
+// --------------------------------- METAS ---------------------------------
+// Meses que faltan desde "hoy" hasta la fecha límite, contando el mes en curso
+// solo si todavía no termina. Mínimo 1: una meta vencida pide lo que falta de una vez.
+function mesesHasta(fechaLimite, hoy = new Date().toISOString().slice(0, 10)) {
+  const [a1, m1, d1] = hoy.split('-').map(Number);
+  const [a2, m2, d2] = fechaLimite.split('-').map(Number);
+  let meses = (a2 - a1) * 12 + (m2 - m1); // del 10 de nov al 10 de dic = 1 mes
+  if (d2 < d1) meses -= 1;                  // del 20 de nov al 10 de dic todavía no es un mes completo
+  return Math.max(1, meses);
+}
+
+// Lo que ve el panel de una meta: progreso y cuánto ahorrar al mes para llegar a tiempo.
+// aporteMensualSugerido = lo que falta ÷ meses que quedan (api.md §6). 0 si ya se cumplió.
+function estadoMeta({ objetivo, aportado, plazo }, hoy) {
+  const ahorrado = redondear(Math.max(0, aportado));
+  const falta = Math.max(0, objetivo - ahorrado);
+  return {
+    ahorrado,
+    falta: redondear(falta),
+    porcentaje: objetivo > 0 ? Math.round((ahorrado / objetivo) * 100) : 0,
+    cumplida: falta === 0,
+    aporteMensualSugerido: plazo ? Math.ceil(falta / mesesHasta(plazo, hoy)) : null,
+  };
+}
+
+module.exports = { resumen, mesesAtras, planDineroOcioso, estadoPresupuesto, avisosPresupuestos, estadoMeta, mesesHasta, MESES_RESERVA, CUENTAS_PARA_PAGAR };

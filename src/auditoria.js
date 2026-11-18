@@ -28,6 +28,14 @@ const ACCIONES = {
   presupuesto_creado: 'Creaste un presupuesto',
   presupuesto_actualizado: 'Cambiaste el límite de un presupuesto',
   presupuesto_eliminado: 'Eliminaste un presupuesto',
+  // Metas
+  meta_creada: 'Creaste una meta de ahorro',
+  meta_actualizada: 'Actualizaste una meta',
+  meta_eliminada: 'Eliminaste una meta',
+  aporte_meta: 'Hiciste un aporte o un retiro en una meta',
+  // Recuperación de contraseña
+  contrasena_cambiada: 'Cambiaste tu contraseña',
+  recuperacion_solicitada: 'Solicitaste recuperar tu contraseña',
 };
 
 async function registrar(usuarioId, accion, detalle = '') {
