@@ -19,9 +19,9 @@ Partimos de lo que hay hoy en el código y en Render. Lo que dice **"Por confirm
 | **Deudas y dinero ocioso:** registro de deudas, plan (deudas más caras primero, luego renta fija) y pagos autorizados en el banco | ✅ Hecho | Pagos **simulados** con el banco de prueba. Ver `docs/redireccion-de-dinero.md` |
 | Importar CSV y registrar movimientos a mano | ✅ Hecho | |
 | Centro de privacidad (descargar, borrar, eliminar cuenta) | ✅ Hecho | |
-| Presupuestos por categoría | ⏳ Por confirmar | Contrato en `docs/api.md` §6 |
-| Metas de ahorro | ⏳ Por confirmar | Contrato en `docs/api.md` §6 |
-| Recuperar contraseña por correo | ⏳ Por confirmar | |
+| Presupuestos por categoría | ✅ API lista (17 nov) | Contrato en `docs/api.md` §6. Falta conectar la pantalla de David |
+| Metas de ahorro | ✅ API lista (17 nov) | Contrato en `docs/api.md` §6. Falta conectar la pantalla de David |
+| Recuperar contraseña por correo | ✅ Listo en el código (17 nov) | API y página `/recuperar`. Necesita el PR del correo de Samu y `APP_URL` en Render |
 | Términos y condiciones, política revisada | ⏳ Por confirmar | |
 | Pruebas automáticas de lo nuevo, revisión OWASP, monitoreo | ⏳ Por confirmar | |
 | Datos de demostración | ❌ Pendiente | |

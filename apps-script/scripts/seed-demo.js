@@ -114,6 +114,18 @@ async function main() {
       { dias: 8,  desc: 'Ropa',                monto:   -150_000, cat: 'otros' },
     ];
 
+    // Las categorías deben ser las de src/finanzas/categorias.js: si no, el panel no las
+    // reconoce (selector, colores, presupuestos). Aquí se traduce la etiqueta corta de arriba.
+    const CATEGORIA = {
+      vivienda: 'Vivienda', transporte: 'Transporte', servicios: 'Telefonía e internet',
+      salud: 'Salud', ocio: 'Entretenimiento', otros: 'Compras',
+    };
+    const categoriaReal = (m) => {
+      if (m.cat === 'ingresos') return m.desc.startsWith('Salario') ? 'Salario' : 'Otros ingresos';
+      if (m.cat === 'alimentacion') return m.desc === 'Restaurante' ? 'Restaurantes y domicilios' : 'Mercado';
+      return CATEGORIA[m.cat] || 'Otros gastos';
+    };
+
     for (const m of movimientos) {
       await client.query(
         `INSERT INTO movimientos
@@ -126,7 +138,7 @@ async function main() {
           fechaAleatoria(m.dias),
           cifrar(m.desc),
           m.monto,
-          m.cat,
+          categoriaReal(m),
         ]
       );
     }
@@ -148,18 +160,19 @@ async function main() {
     // ── 5. Presupuestos (mes actual) ──────────────────────────────
     const mesActual = new Date().toISOString().slice(0, 7); // 'YYYY-MM'
     const presupuestos = [
-      { categoria: 'alimentacion', limite: 500_000 },
-      { categoria: 'vivienda',     limite: 850_000 },
-      { categoria: 'transporte',   limite: 120_000 },
-      { categoria: 'servicios',    limite: 100_000 },
-      { categoria: 'ocio',         limite:  80_000 },
+      // Mismos nombres de GASTOS en src/finanzas/categorias.js (si no, el panel no los cruza con los movimientos)
+      { categoria: 'Mercado',            limite: 500_000 },
+      { categoria: 'Vivienda',           limite: 850_000 },
+      { categoria: 'Transporte',         limite: 120_000 },
+      { categoria: 'Telefonía e internet', limite: 100_000 },
+      { categoria: 'Entretenimiento',    limite:  80_000 },
     ];
 
     for (const p of presupuestos) {
       await client.query(
         `INSERT INTO presupuestos (usuario_id, mes, categoria, limite)
          VALUES ($1, $2, $3, $4)
-         ON CONFLICT (usuario_id, mes, categoria) DO UPDATE SET limite = EXCLUDED.limite`,
+         ON CONFLICT DO NOTHING`,
         [usuarioId, mesActual, p.categoria, p.limite]
       );
     }

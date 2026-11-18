@@ -11,14 +11,18 @@
 //   POST   /api/finanzas/cuentas                 → crear cuenta manual
 //   DELETE /api/finanzas/cuentas/:id             → borrar cuenta manual
 //   POST   /api/finanzas/importar                → importar extracto (filas ya leídas del CSV)
-//   GET    /api/finanzas/presupuestos?mes=YYYY-MM → presupuestos con lo gastado en el mes
-//   POST   /api/finanzas/presupuestos            → crear un presupuesto (una categoría de gasto)
-//   PATCH  /api/finanzas/presupuestos/:id        → cambiar el límite
-//   DELETE /api/finanzas/presupuestos/:id        → borrar un presupuesto
 //   GET    /api/privacidad                       → autorizaciones e historial
 //   GET    /api/privacidad/exportar              → descargar todos mis datos (JSON)
 //   POST   /api/privacidad/borrar-finanzas       → borrar toda mi información financiera
 //   POST   /api/privacidad/eliminar-cuenta       → eliminar mi cuenta por completo
+//   GET    /api/finanzas/presupuestos?mes=YYYY-MM → presupuestos con lo gastado en el mes
+//   POST   /api/finanzas/presupuestos            → crear un presupuesto (una categoría de gasto)
+//   PATCH  /api/finanzas/presupuestos/:id        → cambiar el límite
+//   DELETE /api/finanzas/presupuestos/:id        → borrar un presupuesto
+//   GET    /api/finanzas/metas                   → metas de ahorro con su progreso
+//   POST   /api/finanzas/metas                   → crear una meta
+//   POST   /api/finanzas/metas/:id/aportes       → aportar (valor > 0) o retirar (valor < 0)
+//   DELETE /api/finanzas/metas/:id               → borrar una meta
 //  Las deudas y el plan para el dinero ocioso están en finanzas/deudas.js.
 // =====================================================================
 const crypto = require('node:crypto');
@@ -28,16 +32,17 @@ const auditoria = require('../auditoria');
 const openfinance = require('../openfinance');
 const { cifrar, descifrar } = require('../cifrado');
 const { TODAS, INGRESOS, GASTOS, NEUTRA, categorizar } = require('./categorias');
-const { resumen: calcularResumen, mesesAtras, estadoPresupuesto } = require('./analisis');
+const { resumen: calcularResumen, mesesAtras, estadoPresupuesto, estadoMeta } = require('./analisis');
 const { deudaParaRespuesta } = require('./deudas');
 const { enviarJson, leerJson } = require('../http');
 const { exigirUsuario } = require('../sesion');
 const { verificarContrasena, crearLimitador, cookieCerrarSesion } = require('../seguridad');
 
 const TIPOS_CUENTA = ['ahorros', 'corriente', 'tarjeta_credito', 'billetera', 'efectivo', 'otra'];
-const TOPE_LIMITE = 10_000_000_000; // 10.000 millones: el mismo tope que usan cuentas y deudas
 const limiteContrasena = crearLimitador({ maximo: 5, ventanaMin: 15 });
 const limiteImportar = crearLimitador({ maximo: 20, ventanaMin: 15 });
+const TOPE_PESOS = 10_000_000_000; // 10.000 millones: el mismo tope que usan cuentas y deudas
+const MAX_METAS = 30;
 
 const hoyISO = () => new Date().toISOString().slice(0, 10);
 const mesActual = () => hoyISO().slice(0, 7);
@@ -86,13 +91,15 @@ async function resumen(req, res, params, url) {
   const cuentas = await fdb.listarCuentas(usuario.id);
   const conexiones = (await fdb.listarConexiones(usuario.id)).map((c) => ({ ...c, banco: openfinance.nombreBanco(c.institucion) }));
 
+  const presupuestos = await presupuestosDelMes(usuario.id, mes);
+
   enviarJson(res, 200, {
     ok: true,
     usuario: { nombre: usuario.nombre.split(' ')[0] },
     mesesDisponibles: meses,
     cuentas,
     conexiones,
-    ...calcularResumen({ movimientos, cuentas, mes }),
+    ...calcularResumen({ movimientos, cuentas, mes, presupuestos }),
   });
 }
 
@@ -243,16 +250,22 @@ async function importar(req, res) {
 }
 
 // ----------------------------- PRESUPUESTOS -----------------------------
-// Un presupuesto es un límite mensual de gasto para UNA categoría de gasto.
-// Lo gastado no se guarda: se calcula con los movimientos del mes que se pide.
+// Un presupuesto es un límite mensual de gasto para UNA categoría de gasto. Se crea en
+// un mes y sigue valiendo los siguientes hasta que se borre. Lo gastado no se guarda:
+// se calcula con los movimientos del mes que se pide.
 
-// Revisa el límite que llega. Devuelve el número (en pesos enteros) o null si no sirve.
-function validarLimite(valor) {
-  if (valor === '' || valor === null || typeof valor === 'boolean') return null;
-  const limite = Math.round(Number(valor));
-  return Number.isFinite(limite) && limite > 0 && limite < TOPE_LIMITE ? limite : null;
+// Revisa un valor en pesos. Devuelve el número entero o null si no sirve.
+function validarPesos(valor) {
+  if (valor === '' || valor === null || valor === undefined || typeof valor === 'boolean') return null;
+  const n = Math.round(Number(valor));
+  return Number.isFinite(n) && n > 0 && n < TOPE_PESOS ? n : null;
 }
 const ERROR_LIMITE = 'Escribe un límite mayor que cero y menor que 10.000 millones.';
+
+async function presupuestosDelMes(usuarioId, mes) {
+  const filas = await fdb.listarPresupuestosVigentes(usuarioId, mes, mes + '-01', finDeMes(mes));
+  return filas.map((p) => ({ id: p.id, categoria: p.categoria, limite: p.limite, ...estadoPresupuesto(p.gastado, p.limite) }));
+}
 
 async function listarPresupuestos(req, res, params, url) {
   const usuario = await exigirUsuario(req, res);
@@ -260,8 +273,7 @@ async function listarPresupuestos(req, res, params, url) {
   // Sin ?mes= (o con uno mal escrito) se usa el mes en curso
   const pedido = url.searchParams.get('mes');
   const mes = esMes(pedido) ? pedido : mesActual();
-  const filas = await fdb.listarPresupuestos(usuario.id, mes + '-01', finDeMes(mes));
-  const presupuestos = filas.map((p) => ({ id: p.id, categoria: p.categoria, limite: p.limite, ...estadoPresupuesto(p.gastado, p.limite) }));
+  const presupuestos = await presupuestosDelMes(usuario.id, mes);
   // categoriasDisponibles: las de gasto que todavía no tienen presupuesto (para el selector del panel)
   const usadas = new Set(presupuestos.map((p) => p.categoria));
   enviarJson(res, 200, { ok: true, mes, presupuestos, categoriasDisponibles: GASTOS.filter((c) => !usadas.has(c)) });
@@ -273,32 +285,133 @@ async function crearPresupuesto(req, res) {
   const b = await leerJson(req);
   // Solo categorías de GASTO: no tiene sentido un "límite" para el salario
   if (!GASTOS.includes(b.categoria)) return enviarJson(res, 400, { ok: false, error: 'Elige una categoría de gasto.' });
-  const limite = validarLimite(b.limite);
+  const limite = validarPesos(b.limite);
   if (limite === null) return enviarJson(res, 400, { ok: false, error: ERROR_LIMITE });
-  const id = await fdb.crearPresupuesto(usuario.id, b.categoria, limite);
+
+  // Una categoría, un presupuesto: si ya hay uno vigente, se edita (409 = ya existe)
+  const mes = mesActual();
+  const vigentes = await fdb.listarPresupuestosVigentes(usuario.id, mes, mes + '-01', finDeMes(mes));
+  if (vigentes.some((p) => p.categoria === b.categoria)) {
+    return enviarJson(res, 409, { ok: false, error: `Ya tienes un presupuesto para "${b.categoria}". Cambia su límite en vez de crear otro.` });
+  }
+  const id = await fdb.insertarPresupuesto(usuario.id, mes, b.categoria, limite);
   if (!id) return enviarJson(res, 409, { ok: false, error: `Ya tienes un presupuesto para "${b.categoria}". Cambia su límite en vez de crear otro.` });
-  await auditoria.registrar(usuario.id, 'presupuesto_creado', b.categoria);
+  await auditoria.registrar(usuario.id, 'presupuesto_creado', `${b.categoria}: límite ${limite}`);
   enviarJson(res, 201, { ok: true, id });
 }
 
 async function actualizarPresupuesto(req, res, params) {
   const usuario = await exigirUsuario(req, res);
   if (!usuario) return;
-  const limite = validarLimite((await leerJson(req)).limite);
+  const limite = validarPesos((await leerJson(req)).limite);
   if (limite === null) return enviarJson(res, 400, { ok: false, error: ERROR_LIMITE });
   // La consulta filtra por usuario_id: si el id es de otra persona, no cambia nada y responde 404
   const ok = await fdb.actualizarPresupuesto(usuario.id, Number(params.id), limite);
   if (!ok) return enviarJson(res, 404, { ok: false, error: 'Presupuesto no encontrado.' });
-  await auditoria.registrar(usuario.id, 'presupuesto_actualizado', `presupuesto ${params.id}`);
+  await auditoria.registrar(usuario.id, 'presupuesto_actualizado', `presupuesto ${params.id}: límite ${limite}`);
   enviarJson(res, 200, { ok: true });
 }
 
 async function eliminarPresupuesto(req, res, params) {
   const usuario = await exigirUsuario(req, res);
   if (!usuario) return;
-  const ok = await fdb.eliminarPresupuesto(usuario.id, Number(params.id));
-  if (!ok) return enviarJson(res, 404, { ok: false, error: 'Presupuesto no encontrado.' });
-  await auditoria.registrar(usuario.id, 'presupuesto_eliminado', `presupuesto ${params.id}`);
+  const p = await fdb.obtenerPresupuesto(usuario.id, Number(params.id));
+  if (!p) return enviarJson(res, 404, { ok: false, error: 'Presupuesto no encontrado.' });
+  await fdb.eliminarPresupuestoCategoria(usuario.id, p.categoria);
+  await auditoria.registrar(usuario.id, 'presupuesto_eliminado', p.categoria);
+  enviarJson(res, 200, { ok: true });
+}
+
+// -------------------------------- METAS ---------------------------------
+// Una meta de ahorro: nombre, objetivo en pesos y, si la persona quiere, una fecha límite.
+// El nombre se guarda cifrado (puede decir algo personal, ej. "Pagar el abogado").
+const MAX_NOMBRE_META = 60;
+const MESES_SIN_FECHA = 12; // fecha de referencia que se guarda en "plazo" cuando no eligen una
+
+function metaParaRespuesta(m) {
+  let nombre = m.nombre; // metas de los datos de demo: nombre en claro
+  if (m.nombre_cifrado) {
+    try { nombre = descifrar(m.nombre_cifrado); } catch { nombre = '(no se pudo leer)'; }
+  }
+  const plazo = m.sin_fecha ? null : m.plazo;
+  const estado = estadoMeta({ objetivo: m.objetivo, aportado: m.aportado, plazo });
+  return { id: m.id, nombre, objetivo: m.objetivo, fechaLimite: plazo, ...estado };
+}
+
+async function listarMetas(req, res) {
+  const usuario = await exigirUsuario(req, res);
+  if (!usuario) return;
+  enviarJson(res, 200, { ok: true, metas: (await fdb.listarMetas(usuario.id)).map(metaParaRespuesta) });
+}
+
+async function crearMeta(req, res) {
+  const usuario = await exigirUsuario(req, res);
+  if (!usuario) return;
+  const b = await leerJson(req);
+  const nombre = textoLimpio(b.nombre, 200);
+  if (!nombre) return enviarJson(res, 400, { ok: false, error: 'Ponle un nombre a la meta.' });
+  if (nombre.length > MAX_NOMBRE_META) return enviarJson(res, 400, { ok: false, error: `El nombre puede tener máximo ${MAX_NOMBRE_META} caracteres.` });
+  const objetivo = validarPesos(b.objetivo);
+  if (objetivo === null) return enviarJson(res, 400, { ok: false, error: 'El objetivo debe ser mayor que cero y menor que 10.000 millones.' });
+
+  // La fecha límite es opcional. Sin ella no hay aporte mensual sugerido.
+  const sinFecha = b.fechaLimite === undefined || b.fechaLimite === null || b.fechaLimite === '';
+  const fecha = sinFecha ? enMeses(MESES_SIN_FECHA) : String(b.fechaLimite);
+  if (!sinFecha && !fechaFutura(fecha)) return enviarJson(res, 400, { ok: false, error: 'La fecha límite debe ser desde hoy y hasta dentro de 30 años.' });
+  if (await fdb.contarMetas(usuario.id) >= MAX_METAS) return enviarJson(res, 400, { ok: false, error: `Puedes tener máximo ${MAX_METAS} metas.` });
+
+  const id = await fdb.crearMeta({ usuarioId: usuario.id, nombreCifrado: cifrar(nombre), objetivo, plazo: fecha, sinFecha });
+  await auditoria.registrar(usuario.id, 'meta_creada', `meta ${id}: objetivo ${objetivo}`);
+  enviarJson(res, 201, { ok: true, id });
+}
+
+// Fecha (YYYY-MM-DD) dentro de n meses
+function enMeses(n) {
+  const d = new Date(); d.setUTCMonth(d.getUTCMonth() + n);
+  return d.toISOString().slice(0, 10);
+}
+
+// Fecha YYYY-MM-DD real, desde hoy y hasta 30 años
+function fechaFutura(f) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(f)) return false;
+  const d = new Date(f + 'T00:00:00Z');
+  if (Number.isNaN(d.getTime()) || d.toISOString().slice(0, 10) !== f) return false;
+  const tope = new Date(); tope.setUTCFullYear(tope.getUTCFullYear() + 30);
+  return f >= hoyISO() && d <= tope;
+}
+
+async function aportarMeta(req, res, params) {
+  const usuario = await exigirUsuario(req, res);
+  if (!usuario) return;
+  const b = await leerJson(req);
+  const valor = typeof b.valor === 'boolean' || b.valor === '' || b.valor === null ? NaN : Math.round(Number(b.valor));
+  if (!Number.isFinite(valor) || valor === 0 || Math.abs(valor) >= TOPE_PESOS) {
+    return enviarJson(res, 400, { ok: false, error: 'Escribe un valor distinto de cero (negativo para retirar).' });
+  }
+  const fecha = b.fecha === undefined || b.fecha === null || b.fecha === '' ? hoyISO() : b.fecha;
+  if (!fechaValida(fecha)) return enviarJson(res, 400, { ok: false, error: 'La fecha no es válida (no puede ser futura).' });
+
+  const meta = await fdb.obtenerMeta(usuario.id, Number(params.id));
+  if (!meta) return enviarJson(res, 404, { ok: false, error: 'Meta no encontrada.' });
+  const ahorrado = Math.max(0, meta.aportado);
+  // Un retiro no puede dejar la meta en negativo
+  if (valor < 0 && -valor > ahorrado) {
+    return enviarJson(res, 400, { ok: false, error: `Solo puedes retirar hasta ${pesosTexto(ahorrado)}.` });
+  }
+  const tipo = valor > 0 ? 'aporte' : 'retiro';
+  const id = await fdb.aportarMeta(usuario.id, meta.id, Math.abs(valor), { tipo, fecha });
+  if (!id) return enviarJson(res, 404, { ok: false, error: 'Meta no encontrada.' });
+  await auditoria.registrar(usuario.id, 'aporte_meta', `meta ${meta.id}: ${tipo} de ${Math.abs(valor)}`);
+  enviarJson(res, 201, { ok: true, ahorrado: ahorrado + valor });
+}
+const pesosTexto = (v) => '$' + Math.round(v).toLocaleString('es-CO');
+
+async function eliminarMeta(req, res, params) {
+  const usuario = await exigirUsuario(req, res);
+  if (!usuario) return;
+  const ok = await fdb.eliminarMeta(usuario.id, Number(params.id)); // sus aportes se borran en cascada
+  if (!ok) return enviarJson(res, 404, { ok: false, error: 'Meta no encontrada.' });
+  await auditoria.registrar(usuario.id, 'meta_eliminada', `meta ${params.id}`);
   enviarJson(res, 200, { ok: true });
 }
 
@@ -328,9 +441,10 @@ async function exportar(req, res) {
     cuentas: await fdb.listarCuentas(usuario.id),
     movimientos: descifrarMovimientos(await fdb.listarMovimientos(usuario.id)),
     deudas: (await fdb.listarDeudas(usuario.id)).map(deudaParaRespuesta),
-    presupuestos: (await fdb.listarPresupuestos(usuario.id, mesActual() + '-01', finDeMes(mesActual())))
-      .map(({ id, categoria, limite }) => ({ id, categoria, limite })),
     pagos_e_inversiones: await fdb.listarRedirecciones(usuario.id),
+    presupuestos: (await fdb.listarPresupuestosVigentes(usuario.id, mesActual(), mesActual() + '-01', finDeMes(mesActual())))
+      .map(({ id, categoria, limite }) => ({ id, categoria, limite })),
+    metas: (await fdb.listarMetas(usuario.id)).map(metaParaRespuesta),
     historial: await auditoria.listar(usuario.id, 1000),
   };
   await auditoria.registrar(usuario.id, 'datos_exportados', '');
@@ -374,6 +488,7 @@ async function eliminarCuentaUsuario(req, res) {
 module.exports = {
   resumen, listarMovimientos, crearMovimiento, actualizarMovimiento, eliminarMovimiento,
   listarCuentas, crearCuenta, eliminarCuenta, importar,
-  listarPresupuestos, crearPresupuesto, actualizarPresupuesto, eliminarPresupuesto,
   privacidad, exportar, borrarFinanzas, eliminarCuentaUsuario,
+  listarPresupuestos, crearPresupuesto, actualizarPresupuesto, eliminarPresupuesto,
+  listarMetas, crearMeta, aportarMeta, eliminarMeta,
 };

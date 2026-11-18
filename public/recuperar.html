@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<!-- El enlace del correo trae el token en la URL: que el navegador no lo mande a otros sitios -->
+<meta name="referrer" content="no-referrer">
+<title>Crea una contraseña nueva · Auto-Wealth</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%92%B0%3C/text%3E%3C/svg%3E">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
+<link rel="stylesheet" href="/assets/recuperar.css">
+</head>
+<body>
+<header><a href="/">← Auto·Wealth</a></header>
+<main>
+  <section class="tarjeta" aria-labelledby="titulo">
+    <h1 id="titulo">Crea una contraseña nueva</h1>
+
+    <!-- Formulario: se muestra si el enlace trae un token -->
+    <form id="formulario" novalidate hidden>
+      <p class="sub">Elige una contraseña de al menos 8 caracteres. Al guardarla se cierran tus sesiones abiertas en otros dispositivos.</p>
+      <div class="campo">
+        <label for="clave">Contraseña nueva</label>
+        <input id="clave" type="password" autocomplete="new-password" minlength="8" maxlength="128" required>
+      </div>
+      <div class="campo">
+        <label for="clave2">Repite la contraseña</label>
+        <input id="clave2" type="password" autocomplete="new-password" minlength="8" maxlength="128" required>
+      </div>
+      <label class="ver"><input id="mostrar" type="checkbox"> Mostrar contraseñas</label>
+      <p id="mensaje" class="mensaje" role="alert" hidden></p>
+      <button id="guardar" class="boton" type="submit">Guardar contraseña nueva</button>
+    </form>
+
+    <!-- Resultado: éxito o enlace inválido -->
+    <div id="listo" hidden>
+      <p class="ok" role="status">Listo: tu contraseña quedó cambiada. Ya puedes iniciar sesión con ella.</p>
+      <a class="boton" href="/?entrar=1">Iniciar sesión</a>
+    </div>
+    <div id="sinToken" hidden>
+      <p class="mensaje" role="alert">Este enlace no es válido. Pide uno nuevo desde "¿Olvidaste tu contraseña?" en la página de inicio.</p>
+      <a class="boton" href="/?entrar=1">Ir al inicio</a>
+    </div>
+  </section>
+</main>
+<script src="/assets/recuperar.js"></script>
+</body>
+</html>

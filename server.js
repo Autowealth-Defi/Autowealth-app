@@ -9,6 +9,7 @@
 //   4. Panel financiero: Open Finance (conexión con bancos), registro manual,
 //      importación de extractos, análisis y centro de privacidad.
 //   5. Deudas y plan para el dinero ocioso, con pagos simulados en el banco de prueba.
+//   6. Presupuestos por categoría, metas de ahorro y recuperar la contraseña por correo.
 //
 //  Para arrancarlo:  npm start   → abre http://localhost:3000
 // =====================================================================
@@ -38,7 +39,7 @@ function leerPublico(relativo) {
   if (config.esProduccion) cache.set(relativo, contenido);
   return contenido;
 }
-const PAGINAS = { '/': 'index.html', '/index.html': 'index.html', '/privacidad': 'privacidad.html', '/terminos': 'terminos.html' };
+const PAGINAS = { '/': 'index.html', '/index.html': 'index.html', '/privacidad': 'privacidad.html', '/terminos': 'terminos.html', '/recuperar': 'recuperar.html' };
 const TIPOS = {
   '.css': 'text/css; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.svg': 'image/svg+xml',
   '.png': 'image/png', '.jpg': 'image/jpeg', '.webp': 'image/webp', '.ico': 'image/x-icon', '.woff2': 'font/woff2',
@@ -66,6 +67,8 @@ const API = [
   ['POST', '/api/salir', rutas.salir],
   ['GET', '/api/yo', rutas.yo],
   ['GET', '/api/salud', rutas.salud],
+  ['POST', '/api/recuperar', rutas.recuperar],
+  ['POST', '/api/recuperar/confirmar', rutas.confirmarRecuperacion],
 
   ['GET', '/api/finanzas/resumen', finanzas.resumen],
   ['GET', '/api/finanzas/movimientos', finanzas.listarMovimientos],
@@ -80,6 +83,10 @@ const API = [
   ['POST', '/api/finanzas/presupuestos', finanzas.crearPresupuesto],
   ['PATCH', '/api/finanzas/presupuestos/:id', finanzas.actualizarPresupuesto],
   ['DELETE', '/api/finanzas/presupuestos/:id', finanzas.eliminarPresupuesto],
+  ['GET', '/api/finanzas/metas', finanzas.listarMetas],
+  ['POST', '/api/finanzas/metas', finanzas.crearMeta],
+  ['POST', '/api/finanzas/metas/:id/aportes', finanzas.aportarMeta],
+  ['DELETE', '/api/finanzas/metas/:id', finanzas.eliminarMeta],
 
   ['GET', '/api/finanzas/deudas', deudas.listarDeudas],
   ['POST', '/api/finanzas/deudas', deudas.crearDeuda],

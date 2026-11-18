@@ -1,5 +1,8 @@
 // =====================================================================
-//  correo.js — Envía el correo de bienvenida con el enlace a la encuesta.
+//  correo.js — Envía los correos de Auto-Wealth:
+//   - enviarCorreoEncuesta:      bienvenida con el enlace a la encuesta.
+//   - enviarCorreoRecuperacion:  "Crea una contraseña nueva", con el enlace
+//                                de un solo uso (vence en 30 minutos).
 //
 //  Proveedores:
 //   - "consola": no envía nada, imprime el correo en la terminal (para probar).
@@ -43,6 +46,54 @@ function plantillaEncuesta(nombre) {
   return { asunto, html, textoPlano };
 }
 
+function plantillaRecuperacion(nombre, enlace) {
+  const primerNombre = escaparHtml(String(nombre).split(' ')[0]);
+  const url = escaparHtml(enlace);
+  const asunto = 'Crea una contraseña nueva · Auto-Wealth';
+
+  const html = `
+<div style="font-family:Arial,Helvetica,sans-serif;max-width:560px;margin:0 auto;color:#2d2640;">
+  <div style="background:#7c5cbf;padding:24px;border-radius:14px 14px 0 0;text-align:center;">
+    <h1 style="color:#ffffff;margin:0;font-size:22px;">Auto-Wealth</h1>
+    <p style="color:#e8e0f7;margin:6px 0 0;font-size:13px;">Motor de Riqueza Inteligente</p>
+  </div>
+  <div style="background:#f8f5fc;padding:28px 24px;border-radius:0 0 14px 14px;">
+    <p style="font-size:16px;margin-top:0;">Hola ${primerNombre},</p>
+    <p style="font-size:15px;line-height:1.55;">Recibimos una solicitud para crear una contraseña nueva
+      en tu cuenta de Auto-Wealth. Usa el botón para elegirla.</p>
+    <p style="text-align:center;margin:28px 0;">
+      <a href="${url}" style="background:#7c5cbf;color:#ffffff;padding:14px 30px;border-radius:30px;text-decoration:none;font-weight:bold;font-size:15px;display:inline-block;">Crea una contraseña nueva</a>
+    </p>
+    <p style="font-size:14px;line-height:1.5;background:#ffffff;border-left:4px solid #7c5cbf;padding:10px 14px;">
+      <strong>Si no fuiste tú, ignora este correo.</strong> El enlace vence en 30 minutos.</p>
+    <p style="font-size:13px;color:#6b6280;">Si el botón no funciona, copia este enlace en tu navegador:<br>
+      <a href="${url}" style="color:#7c5cbf;word-break:break-all;">${url}</a></p>
+    <p style="font-size:15px;margin-bottom:0;">Equipo Auto-Wealth</p>
+  </div>
+</div>`;
+
+  const textoPlano = `Hola ${String(nombre).split(' ')[0]},\n\nRecibimos una solicitud para crear una contraseña nueva ` +
+    `en Auto-Wealth. Ábrela aquí: ${enlace}\n\nSi no fuiste tú, ignora este correo. El enlace vence en 30 minutos.\n\nEquipo Auto-Wealth`;
+
+  return { asunto, html, textoPlano };
+}
+
+// Arma el enlace del correo con APP_URL (nunca con la cabecera "Host" de la petición)
+function crearEnlaceRecuperacion(token) {
+  if (!config.appUrl) throw new Error('Falta APP_URL en Render (Environment): sin ella no se puede armar el enlace de recuperación.');
+  return `${config.appUrl}/recuperar?token=${encodeURIComponent(token)}`;
+}
+
+// Misma regla que el Apps Script: solo enlaces a NUESTRA página de recuperar, con un
+// token de caracteres simples. No basta con "empieza por APP_URL", porque
+// "https://app.onrender.com.sitio-falso.com" también empieza igual.
+function enlaceDeRecuperacionValido(enlace) {
+  if (!config.appUrl) return false;
+  const prefijo = `${config.appUrl}/recuperar?token=`;
+  const texto = String(enlace);
+  return texto.startsWith(prefijo) && /^[A-Za-z0-9_-]{20,200}$/.test(texto.slice(prefijo.length));
+}
+
 async function enviarConBrevo({ para, nombre, asunto, html, textoPlano }) {
   const respuesta = await fetch('https://api.brevo.com/v3/smtp/email', {
     method: 'POST',
@@ -63,14 +114,15 @@ async function enviarConBrevo({ para, nombre, asunto, html, textoPlano }) {
 }
 
 // Envía desde TU cuenta de Gmail usando un Apps Script de Google.
-// El servidor solo manda el destinatario y el nombre; el diseño del correo
-// vive dentro del Apps Script. Así, aunque alguien conociera la clave secreta,
-// solo podría enviar el correo de la encuesta y nada más.
-async function enviarConGmail({ para, nombre }) {
+// El servidor solo manda el destinatario, el nombre, el tipo de correo y (para
+// recuperación) el enlace; el diseño del correo vive dentro del Apps Script. Así,
+// aunque alguien conociera la clave secreta, solo podría enviar la encuesta o
+// enlaces a la página de recuperar de nuestra app (URL_APP), y nada más.
+async function enviarConGmail({ para, nombre, tipo = 'encuesta', enlace }) {
   const respuesta = await fetch(config.correo.gmailScriptUrl, {
     method: 'POST',
     headers: { 'content-type': 'text/plain;charset=utf-8' },
-    body: JSON.stringify({ secreto: config.correo.gmailScriptSecreto, para, nombre }),
+    body: JSON.stringify({ secreto: config.correo.gmailScriptSecreto, tipo, para, nombre, enlace }),
     redirect: 'follow',
     signal: AbortSignal.timeout(20_000), // Google puede tardar unos segundos
   });
@@ -104,4 +156,37 @@ async function enviarCorreoEncuesta(para, nombre) {
   console.log(`   Texto:  ${textoPlano.replace(/\n+/g, ' ')}\n`);
 }
 
-module.exports = { enviarCorreoEncuesta, plantillaEncuesta };
+// Función principal: la usa la ruta POST /api/recuperar (Juanes).
+// "enlace" se arma con crearEnlaceRecuperacion(token). Si el enlace no es de
+// nuestra app, se lanza un error y no se envía nada.
+async function enviarCorreoRecuperacion(para, nombre, enlace) {
+  if (!enlaceDeRecuperacionValido(enlace)) {
+    // El mensaje no incluye el enlace: lleva el token y no debe quedar en los Logs
+    throw new Error('Enlace de recuperación inválido: debe armarse con crearEnlaceRecuperacion(token) y APP_URL.');
+  }
+
+  if (config.correo.proveedor === 'gmail') {
+    return enviarConGmail({ para, nombre, tipo: 'recuperacion', enlace });
+  }
+
+  const { asunto, html, textoPlano } = plantillaRecuperacion(nombre, enlace);
+
+  if (config.correo.proveedor === 'brevo') {
+    return enviarConBrevo({ para, nombre, asunto, html, textoPlano });
+  }
+
+  // Modo "consola": en tu computador muestra el enlace para poder probar el flujo.
+  // En producción NO: quien viera los Logs de Render podría cambiar la contraseña de otra persona.
+  const enlaceVisible = config.esProduccion ? `${config.appUrl}/recuperar?token=••••••` : enlace;
+  console.log('\n📧 [modo consola] Correo de recuperación que se enviaría:');
+  console.log(`   Para:   ${para}`);
+  console.log(`   Asunto: ${asunto}`);
+  console.log(`   Enlace: ${enlaceVisible}`);
+  if (config.esProduccion) console.log('   ⚠️ En producción usa EMAIL_PROVIDER=gmail o brevo: en modo consola nadie recibe este correo.');
+  console.log('');
+}
+
+module.exports = {
+  enviarCorreoEncuesta, plantillaEncuesta,
+  enviarCorreoRecuperacion, plantillaRecuperacion, crearEnlaceRecuperacion,
+};

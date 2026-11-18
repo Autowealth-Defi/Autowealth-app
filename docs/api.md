@@ -234,31 +234,45 @@ Protegido con usuario y contraseña del navegador (`ADMIN_USER` / `ADMIN_PASSWOR
 
 ---
 
-## 6. Rutas planeadas para este mes (propuesta)
+## 6. Presupuestos, metas y recuperar contraseña
 
-> ✏️ **PROPUESTA para que Juanes la confirme o ajuste en la Semana 1** (ver [plan de trabajo](plan-de-trabajo/README.md)). Cuando esté acordada, David y Aleja construyen las pantallas con estos formatos aunque el código todavía no exista.
+> Implementado en noviembre de 2026 (antes era una propuesta). Presupuestos y metas están en `src/finanzas/rutas.js` y *requieren sesión*; recuperar contraseña está en `src/rutas.js` y es pública. Pruebas: `tests/finanzas.test.js` y `tests/recuperar.test.js`.
 
-### Presupuestos por categoría · ✅ implementado
-Ya funciona: el contrato definitivo está en [§2 · Presupuestos por categoría](#presupuestos-por-categoría). Cumple lo propuesto y **agrega** (sin quitar nada) `mes` en la respuesta, y `disponible` y `categoriasDisponibles` para facilitar la pantalla.
-Pendiente para la Semana B: que el resumen (`/api/finanzas/resumen`) agregue una recomendación cuando un presupuesto esté `cerca` o `excedido`.
+### Presupuestos por categoría
+El contrato completo está en [§2 · Presupuestos por categoría](#presupuestos-por-categoría). Lo que se agregó en noviembre:
+- Un presupuesto **no se crea otra vez cada mes**: sigue valiendo hasta que se borre, y también sirve para revisar meses anteriores con `?mes=`. En la base de datos se guarda el mes en que se creó (columna `mes`).
+- El **resumen** (`/api/finanzas/resumen`) agrega una recomendación `alerta` por cada presupuesto excedido y una `atencion` por cada uno cerca del límite.
+
 
 ### Metas de ahorro
 | Método y ruta | Cuerpo | Respuesta |
 |---|---|---|
-| `GET /api/finanzas/metas` | — | `{ ok, metas: [ { id, nombre, objetivo, ahorrado, porcentaje, fechaLimite, aporteMensualSugerido } ] }` |
+| `GET /api/finanzas/metas` | — | `{ ok, metas: [ { id, nombre, objetivo, ahorrado, falta, porcentaje, cumplida, fechaLimite, aporteMensualSugerido } ] }`, ordenadas por fecha límite |
 | `POST /api/finanzas/metas` | `{ nombre, objetivo, fechaLimite }` | **201** `{ ok, id }` |
-| `POST /api/finanzas/metas/:id/aportes` | `{ valor, fecha }` (`valor` negativo = retiro) | **201** `{ ok, ahorrado }` |
-| `DELETE /api/finanzas/metas/:id` | — | `{ ok }` |
+| `POST /api/finanzas/metas/:id/aportes` | `{ valor, fecha? }` (`valor` negativo = retiro) | **201** `{ ok, ahorrado }` |
+| `DELETE /api/finanzas/metas/:id` | — | `{ ok }`. Borra también sus aportes |
 
-`aporteMensualSugerido` = lo que falta ÷ meses que quedan hasta `fechaLimite`.
+- `nombre`: de 1 a 60 caracteres. Se guarda **cifrado** (puede decir algo personal).
+- `objetivo`: pesos, mayor que 0 y menor que 10.000 millones.
+- `fechaLimite`: `YYYY-MM-DD`, **opcional**, desde hoy y hasta 30 años. Sin fecha, la respuesta trae `fechaLimite: null` y `aporteMensualSugerido: null`.
+- `valor`: distinto de 0. Un retiro no puede dejar `ahorrado` por debajo de 0 (**400** con el máximo que se puede retirar). `fecha`: opcional, por defecto hoy; no puede ser futura.
+- `aporteMensualSugerido` = lo que falta ÷ meses que quedan hasta `fechaLimite` (mínimo 1 mes), redondeado hacia arriba. `0` si la meta ya se cumplió; `null` si no tiene fecha.
+- Máximo 30 metas por persona. **404** si la meta no existe o no es tuya. Crear, aportar, retirar y borrar quedan en `auditoria`.
 
 ### Recuperar contraseña
 | Método y ruta | Cuerpo | Respuesta |
 |---|---|---|
-| `POST /api/recuperar` | `{ email }` | **Siempre** `{ ok: true }`, exista o no el correo (para no revelar quién está registrado). Si existe, envía un correo con un enlace de un solo uso que vence en 30 minutos |
-| `POST /api/recuperar/confirmar` | `{ token, password }` | `{ ok: true }` y cierra las sesiones anteriores. **400** si el token es inválido o venció |
+| `POST /api/recuperar` | `{ email }` | **Siempre** `{ ok: true, mensaje }`, exista o no el correo. **400** si no es un correo. **429** si una misma IP pide más de 20 en una hora |
+| `POST /api/recuperar/confirmar` | `{ token, password }` | `{ ok: true }`, borra la cookie y **cierra todas las sesiones abiertas**. **400** si el token es inválido, ya se usó o venció, o si la contraseña tiene menos de 8 caracteres |
+| `GET /recuperar?token=...` *(página)* | — | Formulario para escribir la contraseña nueva (`public/recuperar.html`) |
 
-Reglas de seguridad: en la base de datos se guarda solo la **huella** del token (`huella()` de `src/cifrado.js`), no el token. Máximo 3 solicitudes por correo cada hora. Cada uso queda en `auditoria`.
+Reglas de seguridad:
+- El token son 32 bytes aleatorios (`crypto.randomBytes`). En la base de datos (`tokens_recuperacion`) se guarda solo su **huella** (`huella()` de `src/cifrado.js`). Vence en **30 minutos** y sirve **una sola vez**. Pedir uno nuevo invalida los anteriores.
+- La respuesta se envía **antes** de buscar el correo: así tarda lo mismo exista o no, y nadie puede averiguar quién está registrado.
+- Máximo **3 correos por dirección cada hora** (el cuarto no se envía, pero la respuesta es la misma).
+- El enlace se arma con `APP_URL` (nunca con la cabecera `Host`). El correo lo envía `enviarCorreoRecuperacion` de `src/correo.js` (Samu).
+- Al confirmar, `usuarios.version_sesion` sube en 1: las cookies de sesión llevan esa versión y las viejas dejan de servir (`src/sesion.js`).
+- Queda en `auditoria`: `recuperacion_solicitada` y `contrasena_cambiada`.
 
 ---
 
