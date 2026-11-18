@@ -67,7 +67,7 @@
             document.getElementById('toggleAuthLink').addEventListener('click', () => openOverlay('register'));
         } else {
             authTitle.textContent = 'Crea tu cuenta';
-            authSub.textContent = 'Regístrate para usar el prototipo Auto-Wealth';
+            authSub.textContent = 'Regístrate para usar Auto-Wealth';
             loginFields.style.display = 'none';
             registerFields.style.display = 'block';
             authSubmitBtn.innerHTML = '<i class="fas fa-user-plus"></i> Registrarse';
