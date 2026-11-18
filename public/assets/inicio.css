@@ -1213,3 +1213,132 @@ footer { background: var(--mv-vidrio); backdrop-filter: blur(14px); -webkit-back
         }
     }
 }
+
+/* =====================================================================
+   SECCIONES RECUPERADAS (problema, próximamente, planes, pie de página)
+   con el estilo de movimiento. Las tarjetas con la clase .interactiva se
+   inclinan hacia el mouse y una luz las sigue: inicio.js actualiza
+   --rx, --ry (inclinación) y --mx, --my (posición de la luz).
+   ===================================================================== */
+.seccion-titulo { font-size: clamp(2rem, 4vw, 2.6rem); font-weight: 700; text-align: center; letter-spacing: -.03em; }
+.seccion-sub { color: var(--text-secondary); max-width: 680px; margin: .6rem auto 2.2rem; text-align: center; font-size: 1.02rem; }
+
+/* ---------- Tarjetas interactivas ---------- */
+.interactiva {
+    --rx: 0deg; --ry: 0deg; --ty: 0px;
+    position: relative;
+    isolation: isolate;
+    transform: perspective(900px) rotateX(var(--rx)) rotateY(var(--ry)) translateY(var(--ty));
+    transition: transform .35s var(--mv-ease), box-shadow .45s var(--mv-ease), border-color .3s;
+    will-change: transform;
+}
+.interactiva:hover { --ty: -8px; border-color: var(--mv-borde-vivo); box-shadow: 0 30px 60px -24px var(--mv-halo); }
+/* Luz que sigue al mouse */
+.interactiva::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    border-radius: inherit;
+    background: radial-gradient(360px circle at var(--mx, 50%) var(--my, -30%), var(--mv-halo), transparent 60%);
+    opacity: 0;
+    transition: opacity .35s;
+    pointer-events: none;
+}
+.interactiva:hover::after { opacity: .55; }
+
+/* ---------- El problema ---------- */
+.problem-section { padding-top: 4.5rem; }
+.problem-card { background: var(--mv-vidrio); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); padding: 2.1rem 1.8rem; }
+.problem-card i {
+    display: inline-grid; place-items: center;
+    width: 60px; height: 60px; border-radius: 18px; font-size: 1.6rem;
+    color: #ffffff; background: var(--mv-boton); background-size: 200% auto;
+    box-shadow: 0 12px 30px var(--mv-halo);
+    animation: mv-fluir 6s linear infinite;
+    transition: transform .5s var(--mv-resorte);
+}
+.problem-card:hover i { transform: rotate(-10deg) scale(1.12); }
+.problem-card h3 { font-size: 1.3rem; margin: .9rem 0 .4rem; }
+.badge-real { background: var(--mv-boton); background-size: 200% auto; animation: mv-fluir 6s linear infinite; font-size: .68rem; padding: .25rem .9rem; }
+
+/* ---------- Próximamente ---------- */
+.future-section .future-grid { grid-template-columns: 1fr; }
+.future-card { background: var(--mv-vidrio); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); padding: 2.4rem 1.6rem; border-color: transparent; }
+/* Borde de luz que gira, como las tarjetas de funciones */
+.future-card::before {
+    content: '';
+    position: absolute; inset: -1px; border-radius: inherit; padding: 1.5px;
+    background: conic-gradient(from var(--mv-angulo), transparent 0 50%, var(--accent-tertiary) 70%, var(--accent-primary) 85%, transparent 100%);
+    -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+    -webkit-mask-composite: xor; mask-composite: exclude;
+    animation: mv-girar 5s linear infinite;
+    pointer-events: none;
+}
+.future-card i { font-size: 2.6rem; animation: mv-flotar 4s ease-in-out infinite; display: inline-block; }
+.future-card h4 { font-size: 1.25rem; }
+.future-card .soon-badge { background: var(--mv-boton); background-size: 200% auto; animation: mv-fluir 5s linear infinite, mv-latido 2.6s ease-out infinite; font-size: .65rem; padding: .25rem .9rem; }
+
+/* ---------- Planes ---------- */
+.aviso-propuesta {
+    display: inline-flex; align-items: center; gap: .5rem; margin-top: 1rem;
+    padding: .45rem 1rem; border-radius: 999px; font-size: .85rem; font-weight: 500;
+    color: var(--text-secondary); background: var(--mv-vidrio); border: 1px dashed var(--mv-borde-vivo);
+}
+.pricing-toggle span { transition: color .3s, opacity .3s; opacity: .6; }
+.pricing-toggle span.activa { opacity: 1; color: var(--text-primary); font-weight: 600; }
+.badge-save { opacity: 1 !important; background: var(--mv-boton); background-size: 200% auto; animation: mv-fluir 5s linear infinite; }
+.toggle-slider { transition: background .35s var(--mv-ease); }
+.toggle-slider::before { transition: transform .45s var(--mv-resorte) !important; }
+.toggle-switch input:checked + .toggle-slider { background: var(--mv-boton); background-size: 200% auto; animation: mv-fluir 5s linear infinite; }
+
+.pricing-grid { max-width: 1000px; margin: 0 auto; perspective: 1200px; }
+.pricing-card { background: var(--mv-vidrio); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); }
+.pricing-card:hover { transform: perspective(900px) rotateX(var(--rx)) rotateY(var(--ry)) translateY(-10px); }
+.pricing-card.featured, .pricing-card.featured:hover { border-color: transparent; transform: perspective(900px) rotateX(var(--rx)) rotateY(var(--ry)) translateY(var(--ty)); }
+.pricing-card.featured { box-shadow: 0 30px 70px -30px var(--mv-halo); }
+/* Plan destacado: borde de luz que gira siempre */
+.pricing-card.featured::before {
+    content: '';
+    position: absolute; inset: 0; border-radius: inherit; padding: 2px; z-index: 1;
+    background: conic-gradient(from var(--mv-angulo), var(--accent-primary), var(--accent-tertiary), var(--accent-deep), var(--accent-primary));
+    -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+    -webkit-mask-composite: xor; mask-composite: exclude;
+    animation: mv-girar 4s linear infinite;
+    pointer-events: none;
+}
+.popular-badge { z-index: 2; font-size: .68rem; padding: .3rem .9rem; background: var(--mv-boton); background-size: 200% auto; animation: mv-fluir 4s linear infinite; }
+.plan-icon { display: inline-grid !important; place-items: center; width: 64px; height: 64px; margin: 0 auto .4rem; border-radius: 20px; background: var(--accent-soft); transition: transform .5s var(--mv-resorte); }
+.pricing-card:hover .plan-icon { transform: rotate(-10deg) scale(1.1); }
+.pricing-card.featured .plan-icon i { animation: mv-flotar 3s ease-in-out infinite; display: inline-block; }
+.plan-price .amount { display: inline-block; min-width: 1ch; transition: color .3s, text-shadow .3s; }
+.plan-price .amount.cambiando { color: var(--accent-tertiary); text-shadow: 0 0 24px var(--mv-halo); }
+.plan-features li { transition: transform .3s var(--mv-resorte), color .3s; }
+.plan-features li:hover { transform: translateX(6px); color: var(--text-primary); }
+.chip-pronto { display: inline-block; margin-left: .35rem; padding: .05rem .55rem; border-radius: 999px; font-size: .62rem; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--accent-tertiary); border: 1px solid var(--mv-borde-vivo); vertical-align: 1px; }
+.btn-plan { position: relative; overflow: hidden; isolation: isolate; transition: transform .45s var(--mv-resorte), box-shadow .45s var(--mv-ease), background .3s, border-color .3s; }
+.btn-plan:not(.btn-primary):hover { transform: translateY(-3px); border-color: var(--accent-primary); box-shadow: 0 12px 30px -10px var(--mv-halo); }
+.comisiones { max-width: 760px; margin: 2.4rem auto 0; text-align: center; color: var(--text-secondary); font-size: .92rem; line-height: 1.75; padding: 1.2rem 1.5rem; border-radius: 22px; background: var(--mv-vidrio); border: 1px solid var(--border-light); }
+.comisiones strong { color: var(--accent-primary); }
+
+/* ---------- CTA ---------- */
+.cta-nota { margin-top: 1rem; font-size: .85rem; color: rgba(255, 255, 255, .75); }
+.cta-frase { margin-top: 1.2rem; font-size: 1.05rem; font-weight: 600; color: #ffffff; }
+
+/* ---------- Pie de página ---------- */
+.footer-inner { grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 1.6rem; }
+.footer-col ul li a { position: relative; }
+.footer-col ul li a::after { content: ''; position: absolute; left: 0; bottom: -2px; width: 100%; height: 1.5px; background: var(--mv-boton); transform: scaleX(0); transform-origin: left; transition: transform .35s var(--mv-ease); }
+.footer-col ul li a:hover::after { transform: scaleX(1); }
+
+/* ---------- Aparecer al hacer scroll (secciones nuevas) ---------- */
+@supports (animation-timeline: view()) {
+    @media (prefers-reduced-motion: no-preference) {
+        .seccion-titulo, .seccion-sub, .pricing-header, .pricing-toggle, .comisiones { animation: mv-entrar linear both; animation-timeline: view(); animation-range: entry 0% cover 30%; }
+        .problem-grid, .future-grid, .pricing-grid { animation: mv-zoom linear both; animation-timeline: view(); animation-range: entry 0% cover 28%; }
+    }
+}
+@media (max-width: 768px) {
+    .interactiva { transform: none; }
+    .pricing-card.featured, .pricing-card.featured:hover { transform: none; }
+}

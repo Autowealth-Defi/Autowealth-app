@@ -33,6 +33,7 @@
             <a href="/" class="nav-link"><i class="fas fa-home"></i> Inicio</a>
             <a href="#about" class="nav-link"><i class="fas fa-info-circle"></i> Nosotros</a>
             <a href="#features" class="nav-link"><i class="fas fa-cogs"></i> Características</a>
+            <a href="#pricing" class="nav-link"><i class="fas fa-tags"></i> Planes</a>
             <button class="nav-link primary-nav" id="registerOpenBtn"><i class="fas fa-user-plus"></i> Registrarse</button>
         </nav>
 
@@ -61,16 +62,27 @@
             </div>
         </section>
 
+        <!-- PROBLEMA REAL -->
+        <section class="problem-section" aria-labelledby="problem-title" id="problema">
+            <h2 id="problem-title" class="heading-glow seccion-titulo">El problema que <span class="gold">realmente</span> tenemos</h2>
+            <p class="seccion-sub">Las suscripciones olvidadas y los pequeños gastos diarios nos generan un gasto al mes. Auto-Wealth lo detecta y te propone qué hacer con ese dinero.</p>
+            <div class="problem-grid">
+                <div class="problem-card interactiva"><i class="fas fa-receipt"></i><h3>Gastos invisibles</h3><p>Las personas pagan suscripciones que no usan. Nosotros las encontramos.</p><span class="badge-real">caso real</span></div>
+                <div class="problem-card interactiva"><i class="fas fa-piggy-bank"></i><h3>Ahorro automático</h3><p>Con tu autorización, el dinero ocioso va a tus deudas más caras o a renta fija de bajo riesgo. En el prototipo, los pagos son simulados.</p><span class="badge-real">con tu autorización</span></div>
+                <div class="problem-card interactiva"><i class="fas fa-bullseye"></i><h3>Metas alcanzables</h3><p>Creas una meta y te decimos cuánto ahorrar cada mes para llegar a tiempo.</p><span class="badge-real">metas de ahorro</span></div>
+            </div>
+        </section>
+
         <!-- SOBRE NOSOTROS -->
         <section class="about-section" aria-labelledby="about-title" id="about">
             <div class="about-grid">
                 <div class="about-text reveal-left visible">
                     <h2 id="about-title" class="heading-glow">Sobre <span class="gold">Auto-Wealth</span></h2>
-                    <p>Auto-Wealth es un prototipo académico de finanzas personales.</p>
-                    <p>Permite registrar movimientos, importar extractos y consultar un panel con información financiera.</p>
+                    <p>Creemos que la riqueza debe ser accesible para todos. Nacimos con la misión de eliminar el desperdicio financiero y democratizar la inversión.</p>
+                    <p>Más que una app, somos un motor de transformación: analizamos tus hábitos, te mostramos dónde se va tu dinero y te damos las herramientas para que cada peso trabaje para ti.</p>
                     <div class="badge-group">
+                        <span class="badge-about"><i class="fas fa-lock"></i> Datos sensibles cifrados</span>
                         <span class="badge-about"><i class="fas fa-flask"></i> Prototipo académico</span>
-                        
                     </div>
                 </div>
                 <div class="about-visual reveal-right visible">
@@ -80,14 +92,14 @@
         </section>
 
         <!-- OPEN FINANCE -->
-        <section class="openbanking-section" aria-labelledby="ob-title">
+        <section class="openbanking-section" aria-labelledby="ob-title" id="open-finance">
             <div class="ob-grid">
                 <div class="ob-text reveal-left visible">
-                    <h2 id="ob-title" class="heading-glow">Conexión bancaria <span class="gold">de prueba</span></h2>
-                    <p>El prototipo incluye un banco ficticio para mostrar el flujo de autorización y consulta de datos. No conecta con bancos reales.</p>
-                    <p><strong>¿Qué consulta?</strong> En el entorno simulado, el usuario puede autorizar la lectura de cuentas y movimientos. La conexión es de solo lectura: no realiza transferencias ni inversiones.</p>
+                    <h2 id="ob-title" class="heading-glow">Open Finance <span class="gold">transparente</span></h2>
+                    <p>Auto-Wealth usa la lógica de Open Finance para conectar con tu banco. Con tu consentimiento, leemos tus movimientos y generamos información útil sin pedir ni guardar tus claves.</p>
+                    <p><strong>¿Cómo funciona?</strong> Autorizas la consulta en tu banco, traemos tus movimientos y analizamos sus patrones. Si lo apruebas, enviamos solicitudes de pago a tus deudas o a renta fija. En el prototipo usamos un <strong>banco de prueba</strong> y los pagos son simulados.</p>
                     <div class="badge-group">
-                        <span class="badge-about"><i class="fas fa-flask"></i> Datos ficticios de prueba</span>
+                        <span class="badge-about"><i class="fas fa-check-circle"></i> Solo lectura y con tu consentimiento</span>
                     </div>
                 </div>
                 <div class="ob-visual reveal-right visible">
@@ -117,12 +129,107 @@
             </div>
         </section>
 
+        <!-- PRÓXIMAMENTE -->
+        <section class="future-section" aria-labelledby="future-title" id="proximamente">
+            <h2 id="future-title" class="heading-glow seccion-titulo">Próximamente</h2>
+            <div class="future-grid">
+                <div class="future-card interactiva">
+                    <i class="fas fa-graduation-cap"></i>
+                    <h4>Funciones educativas sobre inversiones</h4>
+                    <p>Próximo desarrollo del equipo: contenido y herramientas para aprender a invertir dentro de la app.</p>
+                    <span class="soon-badge">Próximamente</span>
+                </div>
+            </div>
+        </section>
+
+        <!-- PLANES (modelo de negocio propuesto) -->
+        <section class="pricing-section" aria-labelledby="pricing-title" id="pricing">
+            <div class="pricing-header">
+                <h2 id="pricing-title" class="heading-glow">Elige tu <span class="gold">plan de riqueza</span></h2>
+                <p class="pricing-sub">Diseñado para cada etapa de tu viaje financiero. Sin sorpresas, sin comisiones ocultas.</p>
+                <p class="aviso-propuesta"><i class="fas fa-flask"></i> Modelo de negocio propuesto: en el prototipo todas las funciones disponibles son gratis.</p>
+            </div>
+
+            <div class="pricing-toggle">
+                <span id="etiquetaMensual" class="activa">Facturación mensual</span>
+                <label class="toggle-switch">
+                    <input type="checkbox" id="billingToggle" aria-label="Ver precios con facturación anual">
+                    <span class="toggle-slider"></span>
+                </label>
+                <span id="etiquetaAnual">Anual <span class="badge-save">Ahorra 17%</span></span>
+            </div>
+
+            <div class="pricing-grid">
+                <div class="pricing-card interactiva" data-tier="free">
+                    <div class="card-glow"></div>
+                    <div class="card-header">
+                        <span class="plan-icon"><i class="fas fa-seedling"></i></span>
+                        <h3>FREE</h3>
+                        <p class="plan-desc">Para quienes dan sus primeros pasos</p>
+                    </div>
+                    <div class="plan-price">
+                        <span class="currency">$</span>
+                        <span class="amount" data-monthly="0" data-yearly="0">0</span>
+                        <span class="period">/mes</span>
+                        <span class="yearly-note">o $0 al año</span>
+                    </div>
+                    <ul class="plan-features">
+                        <li><i class="fas fa-check-circle"></i> Análisis básicos de los gastos del usuario</li>
+                        <li><i class="fas fa-check-circle"></i> Plan sugerido para tu dinero ocioso</li>
+                        <li><i class="fas fa-check-circle"></i> 1 cuenta bancaria</li>
+                        <li><i class="fas fa-check-circle"></i> Dashboard básico</li>
+                        <li><i class="fas fa-check-circle"></i> Detección de suscripciones olvidadas</li>
+                        <li><i class="fas fa-check-circle"></i> Alertas semanales por correo <span class="chip-pronto">pronto</span></li>
+                        <li><i class="fas fa-check-circle"></i> Soporte por correo electrónico</li>
+                    </ul>
+                    <button class="btn-plan ripple" id="freePlanBtn">Comenzar gratis</button>
+                    <span class="plan-note">Sin compromiso · Cancela cuando quieras</span>
+                </div>
+
+                <div class="pricing-card featured interactiva" data-tier="premium">
+                    <div class="card-glow"></div>
+                    <div class="popular-badge">Más popular</div>
+                    <div class="card-header">
+                        <span class="plan-icon"><i class="fas fa-rocket"></i></span>
+                        <h3>PREMIUM</h3>
+                        <p class="plan-desc">Para inversores activos</p>
+                    </div>
+                    <div class="plan-price">
+                        <span class="currency">$</span>
+                        <span class="amount" data-monthly="8" data-yearly="6.67">8</span>
+                        <span class="period">/mes</span>
+                        <span class="yearly-note">o $79.99 al año</span>
+                    </div>
+                    <ul class="plan-features">
+                        <li><i class="fas fa-check-circle"></i> Análisis del usuario con IA <span class="chip-pronto">pronto</span></li>
+                        <li><i class="fas fa-check-circle"></i> Solicitudes en las transacciones dirigidas a fondos de inversión de renta fija y pago de deudas</li>
+                        <li><i class="fas fa-check-circle"></i> Simulaciones de los Fondos de Inversión</li>
+                        <li><i class="fas fa-check-circle"></i> Análisis avanzado con IA <span class="chip-pronto">pronto</span></li>
+                        <li><i class="fas fa-check-circle"></i> Hasta 5 cuentas bancarias</li>
+                        <li><i class="fas fa-check-circle"></i> Recomendaciones diarias</li>
+                        <li><i class="fas fa-check-circle"></i> Dashboard interactivo</li>
+                        <li><i class="fas fa-check-circle"></i> Alertas en tiempo real <span class="chip-pronto">pronto</span></li>
+                        <li><i class="fas fa-check-circle"></i> Prioridad en soporte</li>
+                        <li><i class="fas fa-gift"></i> Plan anual: ¡te regalamos un mes!</li>
+                    </ul>
+                    <button class="btn-plan btn-primary ripple" id="premiumPlanBtn">Quiero PREMIUM</button>
+                    <span class="plan-note">Hoy te registras gratis · Sin compromiso</span>
+                </div>
+            </div>
+
+            <p class="comisiones">
+                <b>Propuesta de cobro:</b> no te cobramos nada por transferir. Cobramos una comisión del <strong>0.5%</strong> por cada pago o abono a deudas — eliminar una deuda que te cobraba 20% anual o más por solo 0.5% sobre lo abonado es un gran beneficio. Además, cobramos una comisión anualizada del <strong>0.5% al 0.75%</strong> sobre el saldo que mantienes invertido.
+            </p>
+        </section>
+
         <!-- CTA -->
         <div class="cta-glam">
             <div class="inner">
-                <h2 class="heading-glow">Conoce el prototipo Auto-Wealth</h2>
-                <p>Crea una cuenta para consultar el panel, registrar movimientos y explorar el banco simulado.</p>
-                <button class="btn-primary ripple" id="ctaRegisterBtn"><i class="fas fa-user-plus"></i> Crear cuenta</button>
+                <h2 class="heading-glow">Empieza a construir tu riqueza hoy</h2>
+                <p>Regístrate gratis y descubre cuánto dinero puedes recuperar y poner a trabajar. Sin compromiso.</p>
+                <button class="btn-primary ripple" id="ctaRegisterBtn"><i class="fas fa-user-plus"></i> Crear cuenta gratis</button>
+                <p class="cta-nota"><i class="fas fa-check-circle"></i> No necesitas tarjeta · 5 minutos</p>
+                <p class="cta-frase">¡Anímate a darle un buen uso a ese dinero que hoy no estás aprovechando!</p>
             </div>
         </div>
     </main>
@@ -132,24 +239,41 @@
         <div class="footer-inner">
             <div class="footer-col">
                 <h4>Auto-Wealth</h4>
-                <p>Prototipo académico de finanzas personales.</p>
+                <ul>
+                    <li><a href="#about">Sobre nosotros</a></li>
+                    <li><a href="#problema">El problema</a></li>
+                    <li><a href="#proximamente">Próximamente</a></li>
+                </ul>
             </div>
             <div class="footer-col">
-                <h4>Funciones</h4>
+                <h4>Producto</h4>
                 <ul>
-                    <li><a href="#features">Funciones del prototipo</a></li>
+                    <li><a href="#features">Cómo funciona</a></li>
+                    <li><a href="#open-finance">Open Finance</a></li>
+                    <li><a href="#pricing">Precios</a></li>
+                </ul>
+            </div>
+            <div class="footer-col">
+                <h4>Soporte</h4>
+                <ul>
+                    <li><a href="/?entrar=1">Iniciar sesión</a></li>
+                    <li><a href="/app">Ir a mi panel</a></li>
                 </ul>
             </div>
             <div class="footer-col">
                 <h4>Legal</h4>
                 <ul>
+                    <li><a href="/terminos">Términos de uso</a></li>
                     <li><a href="/privacidad">Política de privacidad</a></li>
-                    <li><a href="/terminos">Términos y condiciones</a></li>
                 </ul>
             </div>
         </div>
         <div class="footer-bottom">
-            <span>Auto-Wealth · Prototipo académico</span>
+            <span>© 2026 Auto-Wealth · Prototipo académico de finanzas personales.</span>
+            <div class="legal">
+                <a href="/privacidad">Privacidad</a>
+                <a href="/terminos">Términos</a>
+            </div>
         </div>
     </footer>
 
