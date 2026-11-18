@@ -87,6 +87,11 @@
     registerOpenBtn.addEventListener('click', () => openOverlay('register'));
     heroRegisterBtn.addEventListener('click', () => openOverlay('register'));
     ctaRegisterBtn.addEventListener('click', () => openOverlay('register'));
+    // Botones de los planes: hoy todo es gratis, así que los dos llevan al registro
+    ['freePlanBtn', 'premiumPlanBtn'].forEach((id) => {
+        const b = document.getElementById(id);
+        if (b) b.addEventListener('click', () => openOverlay('register'));
+    });
     // ===== CONEXIÓN CON EL SERVIDOR (Node.js + base de datos) =====
     // La página y el servidor están en la misma dirección, por eso las rutas empiezan con "/api".
     const FORM_LINK = 'https://forms.gle/q7PYdBcBk3SMQzUPA';
@@ -279,4 +284,52 @@
         document.head.appendChild(s);
     }
 
+    // ===== PLANES: mensual / anual =====
+    // Al cambiar, el precio "rueda" del valor viejo al nuevo.
+    const reducirMovimiento = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const toggle = document.getElementById('billingToggle');
+    if (toggle) {
+        const formato = (v) => (Number.isInteger(v) ? String(v) : v.toFixed(2));
+        function animarPrecio(el, desde, hasta) {
+            if (reducirMovimiento || desde === hasta) { el.textContent = formato(hasta); return; }
+            const inicio = performance.now(), dur = 600;
+            el.classList.add('cambiando');
+            (function paso(ahora) {
+                const p = Math.min(1, (ahora - inicio) / dur), e = 1 - Math.pow(1 - p, 3);
+                const v = desde + (hasta - desde) * e;
+                el.textContent = p < 1 ? v.toFixed(Number.isInteger(hasta) && Number.isInteger(desde) ? 0 : 2) : formato(hasta);
+                if (p < 1) requestAnimationFrame(paso); else el.classList.remove('cambiando');
+            })(inicio);
+        }
+        toggle.addEventListener('change', () => {
+            const anual = toggle.checked;
+            document.getElementById('etiquetaMensual').classList.toggle('activa', !anual);
+            document.getElementById('etiquetaAnual').classList.toggle('activa', anual);
+            document.querySelectorAll('.pricing-card .amount').forEach((el) => {
+                const m = parseFloat(el.dataset.monthly), y = parseFloat(el.dataset.yearly);
+                animarPrecio(el, anual ? m : y, anual ? y : m);
+            });
+        });
+    }
+
+    // ===== TARJETAS INTERACTIVAS =====
+    // Se inclinan un poco hacia el mouse y una luz las sigue (--mx, --my en inicio.css).
+    // Solo con mouse y si la persona no pidió reducir el movimiento.
+    if (!reducirMovimiento) {
+        document.querySelectorAll('.interactiva').forEach((card) => {
+            card.addEventListener('pointermove', (e) => {
+                if (e.pointerType !== 'mouse') return;
+                const r = card.getBoundingClientRect();
+                const x = (e.clientX - r.left) / r.width, y = (e.clientY - r.top) / r.height;
+                card.style.setProperty('--mx', (x * 100) + '%');
+                card.style.setProperty('--my', (y * 100) + '%');
+                card.style.setProperty('--ry', ((x - 0.5) * 8) + 'deg');
+                card.style.setProperty('--rx', ((0.5 - y) * 8) + 'deg');
+            });
+            card.addEventListener('pointerleave', () => {
+                card.style.setProperty('--rx', '0deg');
+                card.style.setProperty('--ry', '0deg');
+            });
+        });
+    }
 })();
