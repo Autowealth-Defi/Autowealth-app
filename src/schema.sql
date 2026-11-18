@@ -190,6 +190,11 @@ CREATE TABLE IF NOT EXISTS presupuestos (
     creado_en   TIMESTAMPTZ   NOT NULL DEFAULT now(),
     CONSTRAINT presupuestos_unico UNIQUE (usuario_id, mes, categoria)
 );
+-- Compatibilidad: según qué versión de este archivo corrió primero, la tabla
+-- "presupuestos" puede existir sin la columna "mes" (versión de la rama de Juanes).
+-- Así ambas quedan iguales. La API siempre guarda el mes en que se crea el presupuesto.
+ALTER TABLE presupuestos ADD COLUMN IF NOT EXISTS mes CHAR(7) NOT NULL DEFAULT to_char(now(), 'YYYY-MM');
+
 CREATE INDEX IF NOT EXISTS presupuestos_usuario_idx ON presupuestos (usuario_id, mes);
 
 -- Meta de ahorro (ej. "Viaje a Cartagena")
@@ -228,6 +233,13 @@ CREATE INDEX IF NOT EXISTS tokens_recuperacion_usuario_idx ON tokens_recuperacio
 
 -- Columna para invalidar sesiones antiguas al cambiar la contraseña
 ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS version_sesion INTEGER NOT NULL DEFAULT 1;
+
+-- Metas (noviembre de 2026, para las rutas de metas):
+--  - nombre_cifrado: el nombre de la meta cifrado con cifrar() (puede decir algo personal).
+--    La columna "nombre" queda vacía en las metas nuevas; las de los datos de demo la usan en claro.
+--  - sin_fecha: la persona no eligió fecha límite (en "plazo" queda una fecha de referencia).
+ALTER TABLE metas ADD COLUMN IF NOT EXISTS nombre_cifrado TEXT;
+ALTER TABLE metas ADD COLUMN IF NOT EXISTS sin_fecha BOOLEAN NOT NULL DEFAULT false;
 
 -- Aportes y RETIROS de una meta (noviembre de 2026, para las rutas de metas).
 -- "monto" sigue siendo siempre positivo (así lo exige su CHECK); "tipo" dice si suma o resta.

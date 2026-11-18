@@ -9,15 +9,16 @@
 //  los vuelve a crear. Nunca toca datos de otros usuarios.
 // =====================================================================
 'use strict';
-
-const path = require('node:path');
 const { Pool } = require('pg');
+const path = require('node:path');
+const fs = require('node:fs');
 
 // Carga el .env desde la raíz del proyecto
-const envPath = path.join(__dirname, '..', '.env');
-require('node:fs').existsSync(envPath) && process.loadEnvFile(envPath);
+const envPath = path.join(__dirname, '..', '..', '.env');
+if (fs.existsSync(envPath)) process.loadEnvFile(envPath);
 
-const { cifrar } = require('../src/cifrado');
+// Ahora sí carga cifrado (que usa config.js, que ya encuentra las variables)
+const { cifrar } = require('../../src/cifrado');
 
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
@@ -63,7 +64,7 @@ async function main() {
       await client.query('DELETE FROM auditoria          WHERE usuario_id = $1', [usuarioId]);
     } else {
       // Contraseña fija para demo: "Demo1234!" (bcrypt generado de antemano)
-      const HASH = '$2b$10$rOTIaFBMmHATkB1yDpESx.tOi4FMF3H3tIFwkCMHPjr4hzJeWuq2K';
+      const HASH = 'scrypt$32768$8$1$NIqRMj8i4jzfZLgam0al0A==$Dj21ffzkJ1EHx9KWCJy4OQde7Sjifm7nwwCI/LMZjXH5vHWVQnXsmh9HtauLdJGZ9rVwukKVfgIrZITGhO1qVA==';
       const { rows: nuevo } = await client.query(
         `INSERT INTO usuarios
            (nombre, email, telefono, cedula, password_hash, acepta_datos, acepta_datos_en)
@@ -113,6 +114,18 @@ async function main() {
       { dias: 8,  desc: 'Ropa',                monto:   -150_000, cat: 'otros' },
     ];
 
+    // Las categorías deben ser las de src/finanzas/categorias.js: si no, el panel no las
+    // reconoce (selector, colores, presupuestos). Aquí se traduce la etiqueta corta de arriba.
+    const CATEGORIA = {
+      vivienda: 'Vivienda', transporte: 'Transporte', servicios: 'Telefonía e internet',
+      salud: 'Salud', ocio: 'Entretenimiento', otros: 'Compras',
+    };
+    const categoriaReal = (m) => {
+      if (m.cat === 'ingresos') return m.desc.startsWith('Salario') ? 'Salario' : 'Otros ingresos';
+      if (m.cat === 'alimentacion') return m.desc === 'Restaurante' ? 'Restaurantes y domicilios' : 'Mercado';
+      return CATEGORIA[m.cat] || 'Otros gastos';
+    };
+
     for (const m of movimientos) {
       await client.query(
         `INSERT INTO movimientos
@@ -125,7 +138,7 @@ async function main() {
           fechaAleatoria(m.dias),
           cifrar(m.desc),
           m.monto,
-          m.cat,
+          categoriaReal(m),
         ]
       );
     }
@@ -147,18 +160,19 @@ async function main() {
     // ── 5. Presupuestos (mes actual) ──────────────────────────────
     const mesActual = new Date().toISOString().slice(0, 7); // 'YYYY-MM'
     const presupuestos = [
-      { categoria: 'alimentacion', limite: 500_000 },
-      { categoria: 'vivienda',     limite: 850_000 },
-      { categoria: 'transporte',   limite: 120_000 },
-      { categoria: 'servicios',    limite: 100_000 },
-      { categoria: 'ocio',         limite:  80_000 },
+      // Mismos nombres de GASTOS en src/finanzas/categorias.js (si no, el panel no los cruza con los movimientos)
+      { categoria: 'Mercado',            limite: 500_000 },
+      { categoria: 'Vivienda',           limite: 850_000 },
+      { categoria: 'Transporte',         limite: 120_000 },
+      { categoria: 'Telefonía e internet', limite: 100_000 },
+      { categoria: 'Entretenimiento',    limite:  80_000 },
     ];
 
     for (const p of presupuestos) {
       await client.query(
         `INSERT INTO presupuestos (usuario_id, mes, categoria, limite)
          VALUES ($1, $2, $3, $4)
-         ON CONFLICT (usuario_id, mes, categoria) DO UPDATE SET limite = EXCLUDED.limite`,
+         ON CONFLICT DO NOTHING`,
         [usuarioId, mesActual, p.categoria, p.limite]
       );
     }

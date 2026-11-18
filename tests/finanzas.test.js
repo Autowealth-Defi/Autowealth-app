@@ -312,6 +312,18 @@ describe('Metas de ahorro', { skip: !DB && 'Define TEST_DATABASE_URL para correr
     assert.equal((await c.pedir('/api/finanzas/metas')).datos.metas.length, 0);
   });
 
+  test('sin fecha límite: se puede crear, y no hay aporte sugerido', async () => {
+    const c = cliente();
+    await registrar(c);
+    const nombre = 'Portátil nuevo 💻 para la universidad, con todo y estuche';
+    const r = await c.pedir('/api/finanzas/metas', { method: 'POST', body: { nombre, objetivo: 2_500_000, fechaLimite: null } });
+    assert.equal(r.estado, 201, JSON.stringify(r.datos));
+    const meta = (await c.pedir('/api/finanzas/metas')).datos.metas[0];
+    assert.equal(meta.nombre, nombre, 'nombre largo con emoji: se cifra y se lee completo');
+    assert.equal(meta.fechaLimite, null);
+    assert.equal(meta.aporteMensualSugerido, null);
+  });
+
   test('un retiro no puede dejar la meta en negativo', async () => {
     const c = cliente();
     await registrar(c);
@@ -329,10 +341,10 @@ describe('Metas de ahorro', { skip: !DB && 'Define TEST_DATABASE_URL para correr
     const crear = (body) => c.pedir('/api/finanzas/metas', { method: 'POST', body });
     const base = { nombre: 'Meta', objetivo: 100_000, fechaLimite: enMeses(2) };
     assert.equal((await crear({ ...base, nombre: '' })).estado, 400);
-    assert.equal((await crear({ ...base, nombre: 'x'.repeat(41) })).estado, 400);
+    assert.equal((await crear({ ...base, nombre: 'x'.repeat(61) })).estado, 400, 'máximo 60 caracteres');
     assert.equal((await crear({ ...base, objetivo: 0 })).estado, 400);
     assert.equal((await crear({ ...base, objetivo: 10_000_000_000 })).estado, 400);
-    assert.equal((await crear({ ...base, fechaLimite: null })).estado, 400, 'la fecha límite es obligatoria');
+
     assert.equal((await crear({ ...base, fechaLimite: '2020-01-01' })).estado, 400, 'no puede estar en el pasado');
     assert.equal((await crear({ ...base, fechaLimite: '2027-02-30' })).estado, 400, 'fecha que no existe');
     assert.equal((await crear(base)).estado, 201);

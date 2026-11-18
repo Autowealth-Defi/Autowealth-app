@@ -19,6 +19,7 @@ erDiagram
     usuarios ||--o{ deudas : registra
     usuarios ||--o{ redirecciones : pide
     usuarios ||--o{ banco_demo_pagos : "(banco de prueba)"
+    usuarios ||--o{ presupuestos : "se pone"
     consentimientos ||--o| conexiones : "da origen a"
     conexiones ||--o{ cuentas : "trae"
     conexiones ||--o{ redirecciones : "paga desde"
@@ -33,7 +34,7 @@ erDiagram
         numeric monto
         varchar concepto
         timestamptz creado_en
-        usuarios ||--o{ presupuestos : "define"
+    }
     usuarios ||--o{ metas : "se propone"
     usuarios ||--o{ tokens_recuperacion : "solicita"
     metas ||--o{ aportes_meta : "recibe"
@@ -150,17 +151,19 @@ erDiagram
     presupuestos {
         serial id PK
         int usuario_id FK
-        char mes "YYYY-MM"
-        varchar categoria
-        numeric limite
+        char mes "YYYY-MM, mes en que se creó"
+        varchar categoria "una de GASTOS (categorias.js)"
+        numeric limite "límite mensual, > 0"
         timestamptz creado_en
     }
     metas {
         serial id PK
         int usuario_id FK
-        varchar nombre
+        varchar nombre "vacío; solo en datos de demo"
+        text nombre_cifrado "AES-256-GCM"
         numeric objetivo
         date plazo
+        boolean sin_fecha
         timestamptz creado_en
         timestamptz actualizado_en
     }
@@ -181,7 +184,6 @@ erDiagram
         timestamptz expira_en
         timestamptz usado_en "NULL = válido"
         timestamptz creado_en
-    }
     }
 ```
 
@@ -206,10 +208,10 @@ erDiagram
 - **Eliminar una cuenta** borra sus movimientos.
 - **Eliminar una deuda** deja sus pagos en `redirecciones` (con `deuda_id` en NULL).
 - **Revocar un banco** deja las solicitudes de pago en el historial (con `conexion_id` en NULL).
-- **"Borrar mi información financiera"** borra también `deudas` y `redirecciones`.
+- **"Borrar mi información financiera"** borra también `deudas`, `presupuestos`, `metas` (con sus aportes) y `redirecciones`.
 
 ### Índices
-`ingresos(usuario_id)`, `ingresos(creado_en)`, `consentimientos(usuario_id)`, `conexiones(usuario_id)`, `cuentas(usuario_id)`, `movimientos(usuario_id, fecha DESC)`, `auditoria(usuario_id, creado_en DESC)`, `deudas(usuario_id)`, `redirecciones(usuario_id, creado_en DESC)` y `banco_demo_pagos(usuario_id, institucion)`. Las consultas del panel siempre filtran por `usuario_id` y fecha.
+`ingresos(usuario_id)`, `ingresos(creado_en)`, `consentimientos(usuario_id)`, `conexiones(usuario_id)`, `cuentas(usuario_id)`, `movimientos(usuario_id, fecha DESC)`, `auditoria(usuario_id, creado_en DESC)`, `deudas(usuario_id)`, `redirecciones(usuario_id, creado_en DESC)` `banco_demo_pagos(usuario_id, institucion)` `presupuestos(usuario_id, mes)`, `metas(usuario_id)`, `aportes_meta(meta_id)`, `tokens_recuperacion(usuario_id)` y el que crea sola la restricción `presupuestos_unico`. Las consultas del panel siempre filtran por `usuario_id` y fecha.
 
 ## Reglas para escribir consultas
 
@@ -233,14 +235,12 @@ Hoy no hay un sistema de migraciones: `schema.sql` solo **agrega**. Para cambiar
 - **Columna nueva:** `ALTER TABLE tabla ADD COLUMN IF NOT EXISTS columna tipo;` al final del archivo.
 - **Nunca** borres ni renombres columnas en `schema.sql` sin hablarlo con el equipo: Render ejecuta el archivo al arrancar, contra los datos reales.
 
-## Tablas planeadas para este mes
-
-## Tablas añadidas (noviembre de 2026)
+## Tablas añadidas en noviembre de 2026
 
 | Tabla | Para qué | Reglas importantes |
 |---|---|---|
-| `presupuestos` | Límite de gasto mensual por categoría | Única por `(usuario_id, mes, categoria)`. El mes va como `'YYYY-MM'`: es el mes en que se creó. La API usa la fila más reciente de cada categoría, así que un presupuesto sigue valiendo los meses siguientes |
-| `metas` | Metas de ahorro del usuario | `objetivo > 0`. `plazo` es la fecha límite. `nombre` se guarda **cifrado** (`cifrar()`), por eso la ruta lo limita a 40 caracteres |
+| `presupuestos` | Límite de gasto mensual por categoría | `mes` (`'YYYY-MM'`) es el mes en que se creó. La API usa la fila más reciente de cada categoría, así que un presupuesto sigue valiendo los meses siguientes. **Lo gastado no se guarda**: se calcula con los `movimientos` del mes. La restricción `presupuestos_unico` puede ser `(usuario_id, mes, categoria)` o `(usuario_id, categoria)` según qué versión del archivo creó la tabla; la API funciona con las dos |
+| `metas` | Metas de ahorro del usuario | `objetivo > 0`. El nombre va **cifrado** en `nombre_cifrado` (la columna `nombre` queda vacía; los datos de demo la usan en claro). `plazo` es la fecha límite; si la persona no eligió una, `sin_fecha = true` |
 | `aportes_meta` | Aportes y retiros de una meta | `monto > 0` siempre; `tipo` = `aporte` (suma) o `retiro` (resta). `fecha` = día del aporte. Borra en cascada con la meta. Lo ahorrado = aportes − retiros |
 | `tokens_recuperacion` | Tokens de un solo uso para recuperar contraseña | Se guarda el **hash** del token, nunca el token real. `usado_en = NULL` significa que aún es válido |
 

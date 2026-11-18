@@ -385,6 +385,18 @@ async function listarPresupuestosVigentes(usuarioId, mes, desde, hasta) {
   return rows;
 }
 
+// Crea un presupuesto en el mes dado. Devuelve el id, o null si ya existe uno igual.
+// ON CONFLICT DO NOTHING (sin nombrar columnas) funciona con las dos versiones de la
+// restricción presupuestos_unico que puede tener la base de datos.
+async function insertarPresupuesto(usuarioId, mes, categoria, limite) {
+  const { rows } = await pool.query(
+    `INSERT INTO presupuestos (usuario_id, mes, categoria, limite) VALUES ($1, $2, $3, $4)
+     ON CONFLICT DO NOTHING RETURNING id`,
+    [usuarioId, mes, categoria, limite]
+  );
+  return rows[0] ? rows[0].id : null;
+}
+
 async function obtenerPresupuesto(usuarioId, id) {
   const { rows } = await pool.query(
     'SELECT id, mes, categoria, limite::float8 AS limite FROM presupuestos WHERE usuario_id = $1 AND id = $2',
@@ -413,18 +425,19 @@ async function eliminarPresupuestoCategoria(usuarioId, categoria) {
 
 // -------------------------------- METAS ---------------------------------
 
+// m.nombreCifrado: el nombre ya cifrado. La columna "nombre" (en claro) queda vacía.
 async function crearMeta(m) {
   const { rows } = await pool.query(
-    `INSERT INTO metas (usuario_id, nombre, objetivo, plazo)
-     VALUES ($1, $2, $3, $4) RETURNING id`,
-    [m.usuarioId, m.nombre, m.objetivo, m.plazo]
+    `INSERT INTO metas (usuario_id, nombre, nombre_cifrado, objetivo, plazo, sin_fecha)
+     VALUES ($1, '', $2, $3, $4, $5) RETURNING id`,
+    [m.usuarioId, m.nombreCifrado, m.objetivo, m.plazo, Boolean(m.sinFecha)]
   );
   return rows[0].id;
 }
 
 async function listarMetas(usuarioId) {
   const { rows } = await pool.query(
-    `SELECT mt.id, mt.nombre, mt.objetivo::float8 AS objetivo, to_char(mt.plazo, 'YYYY-MM-DD') AS plazo,
+    `SELECT mt.id, mt.nombre, mt.nombre_cifrado, mt.sin_fecha, mt.objetivo::float8 AS objetivo, to_char(mt.plazo, 'YYYY-MM-DD') AS plazo,
             COALESCE(SUM(CASE WHEN a.tipo = 'retiro' THEN -a.monto ELSE a.monto END), 0)::float8 AS aportado
        FROM metas mt
        LEFT JOIN aportes_meta a ON a.meta_id = mt.id
@@ -438,7 +451,7 @@ async function listarMetas(usuarioId) {
 
 async function obtenerMeta(usuarioId, id) {
   const { rows } = await pool.query(
-    `SELECT mt.id, mt.nombre, mt.objetivo::float8 AS objetivo, to_char(mt.plazo, 'YYYY-MM-DD') AS plazo,
+    `SELECT mt.id, mt.nombre, mt.nombre_cifrado, mt.sin_fecha, mt.objetivo::float8 AS objetivo, to_char(mt.plazo, 'YYYY-MM-DD') AS plazo,
             COALESCE(SUM(CASE WHEN a.tipo = 'retiro' THEN -a.monto ELSE a.monto END), 0)::float8 AS aportado
        FROM metas mt
        LEFT JOIN aportes_meta a ON a.meta_id = mt.id
@@ -498,6 +511,6 @@ module.exports = {
   obtenerCuentaParaPago, crearRedireccion, buscarRedireccionPorState, cerrarRedireccion, montoPendiente, listarRedirecciones,
   registrarPagoBancoDemo, listarPagosBancoDemo,
   crearPresupuesto, listarPresupuestos, eliminarPresupuesto,
-  listarPresupuestosVigentes, obtenerPresupuesto, actualizarPresupuesto, eliminarPresupuestoCategoria,
+  listarPresupuestosVigentes, insertarPresupuesto, obtenerPresupuesto, actualizarPresupuesto, eliminarPresupuestoCategoria,
   crearMeta, listarMetas, obtenerMeta, actualizarMeta, eliminarMeta, aportarMeta, contarMetas,
 };

@@ -294,7 +294,8 @@ async function crearPresupuesto(req, res) {
   if (vigentes.some((p) => p.categoria === b.categoria)) {
     return enviarJson(res, 409, { ok: false, error: `Ya tienes un presupuesto para "${b.categoria}". Cambia su límite en vez de crear otro.` });
   }
-  const id = await fdb.crearPresupuesto({ usuarioId: usuario.id, mes, categoria: b.categoria, limite });
+  const id = await fdb.insertarPresupuesto(usuario.id, mes, b.categoria, limite);
+  if (!id) return enviarJson(res, 409, { ok: false, error: `Ya tienes un presupuesto para "${b.categoria}". Cambia su límite en vez de crear otro.` });
   await auditoria.registrar(usuario.id, 'presupuesto_creado', `${b.categoria}: límite ${limite}`);
   enviarJson(res, 201, { ok: true, id });
 }
@@ -307,7 +308,7 @@ async function actualizarPresupuesto(req, res, params) {
   // La consulta filtra por usuario_id: si el id es de otra persona, no cambia nada y responde 404
   const ok = await fdb.actualizarPresupuesto(usuario.id, Number(params.id), limite);
   if (!ok) return enviarJson(res, 404, { ok: false, error: 'Presupuesto no encontrado.' });
-  await auditoria.registrar(usuario.id, 'presupuesto_creado', `presupuesto ${params.id}: límite ${limite}`);
+  await auditoria.registrar(usuario.id, 'presupuesto_actualizado', `presupuesto ${params.id}: límite ${limite}`);
   enviarJson(res, 200, { ok: true });
 }
 
@@ -322,16 +323,19 @@ async function eliminarPresupuesto(req, res, params) {
 }
 
 // -------------------------------- METAS ---------------------------------
-// Una meta de ahorro: nombre, objetivo en pesos y fecha límite. El nombre se guarda
-// cifrado (puede decir algo personal, ej. "Pagar el abogado").
-const MAX_NOMBRE_META = 40;
-const MAX_CIFRADO = 120; // tamaño de la columna metas.nombre
+// Una meta de ahorro: nombre, objetivo en pesos y, si la persona quiere, una fecha límite.
+// El nombre se guarda cifrado (puede decir algo personal, ej. "Pagar el abogado").
+const MAX_NOMBRE_META = 60;
+const MESES_SIN_FECHA = 12; // fecha de referencia que se guarda en "plazo" cuando no eligen una
 
 function metaParaRespuesta(m) {
-  let nombre;
-  try { nombre = descifrar(m.nombre); } catch { nombre = '(no se pudo leer)'; }
-  const estado = estadoMeta({ objetivo: m.objetivo, aportado: m.aportado, plazo: m.plazo });
-  return { id: m.id, nombre, objetivo: m.objetivo, fechaLimite: m.plazo, ...estado };
+  let nombre = m.nombre; // metas de los datos de demo: nombre en claro
+  if (m.nombre_cifrado) {
+    try { nombre = descifrar(m.nombre_cifrado); } catch { nombre = '(no se pudo leer)'; }
+  }
+  const plazo = m.sin_fecha ? null : m.plazo;
+  const estado = estadoMeta({ objetivo: m.objetivo, aportado: m.aportado, plazo });
+  return { id: m.id, nombre, objetivo: m.objetivo, fechaLimite: plazo, ...estado };
 }
 
 async function listarMetas(req, res) {
@@ -349,18 +353,22 @@ async function crearMeta(req, res) {
   if (nombre.length > MAX_NOMBRE_META) return enviarJson(res, 400, { ok: false, error: `El nombre puede tener máximo ${MAX_NOMBRE_META} caracteres.` });
   const objetivo = validarPesos(b.objetivo);
   if (objetivo === null) return enviarJson(res, 400, { ok: false, error: 'El objetivo debe ser mayor que cero y menor que 10.000 millones.' });
-  // La fecha límite es obligatoria: con ella se calcula cuánto ahorrar cada mes
-  const fecha = typeof b.fechaLimite === 'string' ? b.fechaLimite : '';
-  if (!fechaFutura(fecha)) return enviarJson(res, 400, { ok: false, error: 'Elige una fecha límite desde hoy y hasta dentro de 30 años.' });
 
-  const nombreCifrado = cifrar(nombre);
-  // Con emojis o muchas tildes el texto cifrado crece; si no cabe, pedimos uno más corto
-  if (nombreCifrado.length > MAX_CIFRADO) return enviarJson(res, 400, { ok: false, error: 'El nombre es muy largo. Usa uno más corto.' });
+  // La fecha límite es opcional. Sin ella no hay aporte mensual sugerido.
+  const sinFecha = b.fechaLimite === undefined || b.fechaLimite === null || b.fechaLimite === '';
+  const fecha = sinFecha ? enMeses(MESES_SIN_FECHA) : String(b.fechaLimite);
+  if (!sinFecha && !fechaFutura(fecha)) return enviarJson(res, 400, { ok: false, error: 'La fecha límite debe ser desde hoy y hasta dentro de 30 años.' });
   if (await fdb.contarMetas(usuario.id) >= MAX_METAS) return enviarJson(res, 400, { ok: false, error: `Puedes tener máximo ${MAX_METAS} metas.` });
 
-  const id = await fdb.crearMeta({ usuarioId: usuario.id, nombre: nombreCifrado, objetivo, plazo: fecha });
+  const id = await fdb.crearMeta({ usuarioId: usuario.id, nombreCifrado: cifrar(nombre), objetivo, plazo: fecha, sinFecha });
   await auditoria.registrar(usuario.id, 'meta_creada', `meta ${id}: objetivo ${objetivo}`);
   enviarJson(res, 201, { ok: true, id });
+}
+
+// Fecha (YYYY-MM-DD) dentro de n meses
+function enMeses(n) {
+  const d = new Date(); d.setUTCMonth(d.getUTCMonth() + n);
+  return d.toISOString().slice(0, 10);
 }
 
 // Fecha YYYY-MM-DD real, desde hoy y hasta 30 años

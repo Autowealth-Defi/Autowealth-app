@@ -140,6 +140,49 @@ La página lee el CSV en el navegador y envía solo las filas ya convertidas (m�
 ```
 Usa `cuentaId` (cuenta manual existente) **o** `nombreCuentaNueva`. **201:** `{ "ok": true, "cuentaId": 4, "importados": 3, "duplicados": 0, "invalidas": 2 }`. Importar el mismo archivo dos veces no duplica nada. **429:** más de 20 importaciones en 15 min.
 
+### Presupuestos por categoría
+Un presupuesto es un **límite mensual de gasto para una categoría de gasto** (ej. "Restaurantes y domicilios": $400.000). Cada usuario puede tener **uno por categoría**. Lo gastado **no se guarda**: se calcula cada vez con los movimientos del mes que se pide, así que siempre está al día (también después de sincronizar un banco o de cambiar la categoría de un movimiento).
+
+#### `GET /api/finanzas/presupuestos?mes=YYYY-MM`
+Sin `mes` (o con uno mal escrito) usa el **mes en curso**.
+```json
+{ "ok": true, "mes": "2026-11",
+  "presupuestos": [
+    { "id": 3, "categoria": "Restaurantes y domicilios", "limite": 100000,
+      "gastado": 85000, "porcentaje": 85, "disponible": 15000, "estado": "cerca" }
+  ],
+  "categoriasDisponibles": ["Vivienda", "Mercado", "Transporte", "..."] }
+```
+- `gastado`: suma de los **gastos** (valores negativos) de esa categoría en el mes, en positivo. Las devoluciones o ingresos no lo bajan.
+- `porcentaje`: `gastado ÷ limite × 100`, redondeado. Puede pasar de 100.
+- `disponible`: `limite − gastado`. **Negativo** = cuánto te pasaste.
+- `estado`: `bien` (menos del 80 %), `cerca` (del 80 % al 100 %, incluido gastar justo el límite) o `excedido` (más del 100 %). Se calcula con la proporción exacta, no con el porcentaje redondeado (79,6 % se muestra como 80 % pero sigue en `bien`). **En el panel, muéstralo con texto, no solo con color.**
+- `categoriasDisponibles`: categorías de gasto que todavía no tienen presupuesto (para el selector de "Nuevo presupuesto").
+- Ordenados por nombre de la categoría.
+
+#### `POST /api/finanzas/presupuestos`
+```json
+{ "categoria": "Mercado", "limite": 600000 }
+```
+**201:** `{ "ok": true, "id": 3 }`.
+- `categoria`: una de las categorías de **gasto** de `src/finanzas/categorias.js` (`GASTOS`). Las de ingreso (`Salario`, `Otros ingresos`) no llevan presupuesto.
+- `limite`: número **mayor que 0 y menor que 10.000 millones**. Se redondea a pesos enteros. Un número en texto (`"600000"`) también sirve.
+- **400:** categoría o límite no válidos (el mensaje dice qué corregir). **409:** ya tienes un presupuesto para esa categoría: cambia su límite con `PATCH`.
+
+#### `PATCH /api/finanzas/presupuestos/:id`
+`{ "limite": 750000 }` → `{ "ok": true }`. Solo se puede cambiar el límite (para cambiar de categoría, borra y crea otro). **400:** límite no válido. **404:** no existe o no es tuyo.
+
+#### `DELETE /api/finanzas/presupuestos/:id`
+→ `{ "ok": true }`. **404:** no existe o no es tuyo.
+
+Crear, cambiar y borrar quedan en la `auditoria` (`presupuesto_creado`, `presupuesto_actualizado`, `presupuesto_eliminado`) y se ven en el historial del centro de privacidad.
+
+**Probar con Thunder Client o Postman** (después de `POST /api/ingreso` y con la cabecera `Origin: http://localhost:3000`):
+1. `POST /api/finanzas/presupuestos` con `{ "categoria": "Restaurantes y domicilios", "limite": 100000 }` → 201.
+2. `POST /api/finanzas/movimientos` con `{ "fecha": "<hoy>", "descripcion": "Almuerzo", "valor": 85000, "tipo": "gasto", "categoria": "Restaurantes y domicilios" }`.
+3. `GET /api/finanzas/presupuestos` → `gastado: 85000`, `porcentaje: 85`, `estado: "cerca"`.
+4. Repite el paso 1 → 409.
+
 ---
 
 ## 3. Open Finance — `src/openfinance/index.js` *(requieren sesión)*
@@ -178,8 +221,8 @@ Trae lo nuevo del banco. **200:** `{ "ok": true, "nuevos": 12, "cuentas": 2 }`. 
 | Ruta | Qué hace |
 |---|---|
 | `GET /api/privacidad` | `{ consentimientos: [...], historial: [...], textoConsentimiento }`. El historial son las últimas 60 acciones de la tabla `auditoria` |
-| `GET /api/privacidad/exportar` | Descarga un JSON con **todos** los datos del usuario (derecho de acceso), incluidas `deudas` y `pagos_e_inversiones`. Nunca incluye `password_hash` |
-| `POST /api/privacidad/borrar-finanzas` | `{ "password": "..." }`. Revoca todos los bancos y borra cuentas, movimientos, deudas y solicitudes de pago. **401** si la clave es incorrecta (5 intentos por 15 min) |
+| `GET /api/privacidad/exportar` | Descarga un JSON con **todos** los datos del usuario (derecho de acceso), incluidas `deudas`, `presupuestos` y `pagos_e_inversiones`. Nunca incluye `password_hash` |
+| `POST /api/privacidad/borrar-finanzas` | `{ "password": "..." }`. Revoca todos los bancos y borra cuentas, movimientos, deudas, presupuestos y solicitudes de pago. **401** si la clave es incorrecta (5 intentos por 15 min) |
 | `POST /api/privacidad/eliminar-cuenta` | `{ "password": "..." }`. Borra al usuario y todo lo relacionado, y cierra la sesión |
 
 ---
@@ -196,26 +239,10 @@ Protegido con usuario y contraseña del navegador (`ADMIN_USER` / `ADMIN_PASSWOR
 > Implementado en noviembre de 2026 (antes era una propuesta). Presupuestos y metas están en `src/finanzas/rutas.js` y *requieren sesión*; recuperar contraseña está en `src/rutas.js` y es pública. Pruebas: `tests/finanzas.test.js` y `tests/recuperar.test.js`.
 
 ### Presupuestos por categoría
-| Método y ruta | Cuerpo | Respuesta |
-|---|---|---|
-| `GET /api/finanzas/presupuestos?mes=YYYY-MM` | — | `{ ok, mes, presupuestos: [ { id, categoria, limite, gastado, porcentaje, disponible, estado } ], categoriasDisponibles: [ ... ] }` |
-| `POST /api/finanzas/presupuestos` | `{ categoria, limite }` | **201** `{ ok, id }`. **409** si esa categoría ya tiene presupuesto. **400** si la categoría no es de gasto o el límite no es válido |
-| `PATCH /api/finanzas/presupuestos/:id` | `{ limite }` | `{ ok }`. **404** si no existe o no es tuyo |
-| `DELETE /api/finanzas/presupuestos/:id` | — | `{ ok }`. **404** si no existe o no es tuyo |
-
-- **Un presupuesto por categoría de gasto** (las de `GASTOS` en `categorias.js`). No se crea otra vez cada mes: sigue valiendo hasta que se borre y también sirve para revisar meses anteriores.
-- `limite`: pesos, mayor que 0 y menor que 10.000 millones. Acepta número o texto con número (`"250000"`).
-- `?mes=`: opcional. Sin él (o mal escrito) se usa el mes en curso.
-- `gastado`: suma de los gastos de esa categoría en el mes (las devoluciones no restan). `porcentaje` = gastado ÷ límite, redondeado. `disponible` = límite − gastado (negativo = cuánto te pasaste).
-- `estado`: `bien` (menos del 80 %), `cerca` (del 80 % al 100 %) o `excedido` (más del 100 %). Se compara sin redondear: 79,6 % sigue siendo `bien`.
-- `categoriasDisponibles`: las categorías de gasto que todavía no tienen presupuesto (para el selector del panel).
+El contrato completo está en [§2 · Presupuestos por categoría](#presupuestos-por-categoría). Lo que se agregó en noviembre:
+- Un presupuesto **no se crea otra vez cada mes**: sigue valiendo hasta que se borre, y también sirve para revisar meses anteriores con `?mes=`. En la base de datos se guarda el mes en que se creó (columna `mes`).
 - El **resumen** (`/api/finanzas/resumen`) agrega una recomendación `alerta` por cada presupuesto excedido y una `atencion` por cada uno cerca del límite.
 
-```json
-{ "ok": true, "mes": "2026-11",
-  "presupuestos": [ { "id": 3, "categoria": "Mercado", "limite": 600000, "gastado": 512000, "porcentaje": 85, "disponible": 88000, "estado": "cerca" } ],
-  "categoriasDisponibles": ["Vivienda", "Restaurantes y domicilios", "..."] }
-```
 
 ### Metas de ahorro
 | Método y ruta | Cuerpo | Respuesta |
@@ -225,11 +252,11 @@ Protegido con usuario y contraseña del navegador (`ADMIN_USER` / `ADMIN_PASSWOR
 | `POST /api/finanzas/metas/:id/aportes` | `{ valor, fecha? }` (`valor` negativo = retiro) | **201** `{ ok, ahorrado }` |
 | `DELETE /api/finanzas/metas/:id` | — | `{ ok }`. Borra también sus aportes |
 
-- `nombre`: de 1 a 40 caracteres. Se guarda **cifrado** (puede decir algo personal).
+- `nombre`: de 1 a 60 caracteres. Se guarda **cifrado** (puede decir algo personal).
 - `objetivo`: pesos, mayor que 0 y menor que 10.000 millones.
-- `fechaLimite`: `YYYY-MM-DD`, **obligatoria**, desde hoy y hasta 30 años. (Decisión de noviembre: la tabla `metas` la exige y con ella se calcula el aporte sugerido.)
+- `fechaLimite`: `YYYY-MM-DD`, **opcional**, desde hoy y hasta 30 años. Sin fecha, la respuesta trae `fechaLimite: null` y `aporteMensualSugerido: null`.
 - `valor`: distinto de 0. Un retiro no puede dejar `ahorrado` por debajo de 0 (**400** con el máximo que se puede retirar). `fecha`: opcional, por defecto hoy; no puede ser futura.
-- `aporteMensualSugerido` = lo que falta ÷ meses que quedan hasta `fechaLimite` (mínimo 1 mes), redondeado hacia arriba. `0` si la meta ya se cumplió.
+- `aporteMensualSugerido` = lo que falta ÷ meses que quedan hasta `fechaLimite` (mínimo 1 mes), redondeado hacia arriba. `0` si la meta ya se cumplió; `null` si no tiene fecha.
 - Máximo 30 metas por persona. **404** si la meta no existe o no es tuya. Crear, aportar, retirar y borrar quedan en `auditoria`.
 
 ### Recuperar contraseña
