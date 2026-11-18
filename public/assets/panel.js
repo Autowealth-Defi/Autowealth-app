@@ -1117,7 +1117,7 @@
   // Mensajes al volver del banco después de un pago (?pago=...)
   const pago = new URLSearchParams(location.search).get('pago');
   const MENSAJES_PAGO = {
-    ejecutado: ['ok', 'Listo: tu banco confirmó el pago y ya actualizamos tus saldos. <b>Recuerda: en este prototipo el pago es simulado.</b>'],
+    ejecutado: ['ok', 'Listo: tu banco confirmó el pago y ya actualizamos tus saldos. <b>Recuerda: por ahora el pago es simulado.</b>'],
     rechazado: ['info', 'No se hizo el pago porque lo rechazaste en tu banco. No se movió nada.'],
     'sin-fondos': ['bad', 'Tu banco no tenía saldo suficiente en esa cuenta. No se movió nada.'],
     invalido: ['bad', 'La solicitud de pago venció o ya se usó. Vuelve a empezar desde el plan.'],
